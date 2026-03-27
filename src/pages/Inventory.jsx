@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import api from '../lib/api';
-import { Package, Plus, Send, ClipboardList, History, Beaker, User as UserIcon, Building2, AlertTriangle, ChevronRight, Activity, Calendar, ShieldCheck, Database, Layers } from 'lucide-react';
+import { Package, Plus, Send, ClipboardList, History, Beaker, User as UserIcon, Building2, AlertTriangle, ChevronRight, Activity, Calendar, ShieldCheck, Database, Layers, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const Inventory = () => {
@@ -74,6 +74,30 @@ const Inventory = () => {
     }
   };
 
+  const handleDeleteChemical = async (chemId) => {
+    if (window.confirm('Protocol Alert: Are you sure you want to PURGE this chemical resource?')) {
+      try {
+        await api.delete(`/inventory/chemicals/${chemId}`);
+        toast.success('Chemical Resource Purged');
+        fetchData();
+      } catch (error) {
+        toast.error(error.response?.data?.message || 'Purge Authorization Denied');
+      }
+    }
+  };
+
+  const handleDeleteInventory = async (invId) => {
+    if (window.confirm('Protocol Alert: Are you sure you want to PURGE this inventory allocation?')) {
+      try {
+        await api.delete(`/inventory/${invId}`);
+        toast.success('Inventory Allocation Purged');
+        fetchData();
+      } catch (error) {
+        toast.error(error.response?.data?.message || 'Purge Authorization Denied');
+      }
+    }
+  };
+
   if (loading && chemicals.length === 0) {
     return (
        <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
@@ -122,16 +146,19 @@ const Inventory = () => {
                  <h2 className="text-[10px] font-black text-slate-900 uppercase tracking-widest border-l-2 border-brand-500 pl-3">Centralized Enterprise Stock</h2>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {chemicals.map((chem, idx) => (
-                   <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 group hover:border-slate-900 transition-all relative overflow-hidden">
-                      <p className="text-slate-500 font-bold uppercase tracking-widest text-[8px] mb-2">{chem.unit}</p>
-                      <h4 className="text-sm font-black text-slate-900 mb-6 uppercase truncate">{chem.name}</h4>
-                      <div className="flex items-end gap-2">
-                         <span className="text-2xl font-display font-black text-slate-900 tracking-tight">{chem.mainStock}</span>
-                         <span className="text-[9px] font-black text-emerald-600 mb-0.5">READY</span>
-                      </div>
-                   </div>
-                ))}
+                 {chemicals.map((chem, idx) => (
+                    <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 group hover:border-slate-900 transition-all relative overflow-hidden">
+                       <button onClick={() => handleDeleteChemical(chem._id)} className="absolute top-3 right-3 p-1.5 bg-slate-50 hover:bg-red-50 rounded-lg text-slate-300 hover:text-red-600 transition-all opacity-0 group-hover:opacity-100" title="Purge Resource">
+                          <Trash2 size={14} />
+                       </button>
+                       <p className="text-slate-500 font-bold uppercase tracking-widest text-[8px] mb-2">{chem.unit}</p>
+                       <h4 className="text-sm font-black text-slate-900 mb-6 uppercase truncate">{chem.name}</h4>
+                       <div className="flex items-end gap-2">
+                          <span className="text-2xl font-display font-black text-slate-900 tracking-tight">{chem.mainStock}</span>
+                          <span className="text-[9px] font-black text-emerald-600 mb-0.5">READY</span>
+                       </div>
+                    </div>
+                 ))}
               </div>
            </div>
 
@@ -141,26 +168,29 @@ const Inventory = () => {
                  <h2 className="text-[10px] font-black text-slate-900 uppercase tracking-widest border-l-2 border-amber-500 pl-3">Regional Activity Allocation</h2>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {inventory.map((inv, idx) => (
-                  <div key={idx} className="bg-white p-4 rounded-xl border border-slate-100 hover:border-slate-900 transition-colors group">
-                     <div className="flex justify-between items-start mb-4">
-                        <div className={`p-2 rounded-lg ${inv.ownerType === 'Branch' ? 'bg-indigo-50 text-indigo-500' : 'bg-brand-50 text-brand-500'} group-hover:bg-slate-900 group-hover:text-white transition-all`}>
-                           {inv.ownerType === 'Branch' ? <Building2 size={16} /> : <UserIcon size={16} />}
-                        </div>
-                        <div className="text-right">
-                           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{inv.ownerType}</p>
-                           <p className="text-[10px] font-bold text-slate-900 uppercase">{inv.ownerName}</p>
-                        </div>
-                     </div>
-                     <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 italic truncate">{inv.chemicalId?.name}</p>
-                        <div className="flex items-end gap-2">
-                           <span className="text-xl font-display font-black text-slate-900 tracking-tight">{inv.quantity}</span>
-                           <span className="text-[9px] font-black text-slate-400 mb-0.5 uppercase">{inv.chemicalId?.unit}</span>
-                        </div>
-                     </div>
-                  </div>
-                ))}
+                 {inventory.map((inv, idx) => (
+                   <div key={idx} className="bg-white p-4 rounded-xl border border-slate-100 hover:border-slate-900 transition-colors group relative">
+                      <button onClick={() => handleDeleteInventory(inv._id)} className="absolute top-2 right-2 p-1.5 bg-slate-50 hover:bg-red-50 rounded-lg text-slate-300 hover:text-red-600 transition-all opacity-0 group-hover:opacity-100" title="Purge Allocation">
+                         <Trash2 size={14} />
+                      </button>
+                      <div className="flex justify-between items-start mb-4">
+                         <div className={`p-2 rounded-lg ${inv.ownerType === 'Branch' ? 'bg-indigo-50 text-indigo-500' : 'bg-brand-50 text-brand-500'} group-hover:bg-slate-900 group-hover:text-white transition-all`}>
+                            {inv.ownerType === 'Branch' ? <Building2 size={16} /> : <UserIcon size={16} />}
+                         </div>
+                         <div className="text-right">
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{inv.ownerType}</p>
+                            <p className="text-[10px] font-bold text-slate-900 uppercase">{inv.ownerName}</p>
+                         </div>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 italic truncate">{inv.chemicalId?.name}</p>
+                         <div className="flex items-end gap-2">
+                            <span className="text-xl font-display font-black text-slate-900 tracking-tight">{inv.quantity}</span>
+                            <span className="text-[9px] font-black text-slate-400 mb-0.5 uppercase">{inv.chemicalId?.unit}</span>
+                         </div>
+                      </div>
+                   </div>
+                 ))}
               </div>
            </div>
         </div>

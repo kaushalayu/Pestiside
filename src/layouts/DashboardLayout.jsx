@@ -48,10 +48,8 @@ const DashboardLayout = () => {
       `}>
         <div className="flex flex-col h-full overflow-y-auto no-scrollbar">
           <div className="p-6 flex items-center justify-between border-b border-white/5">
-            <h1 className="text-lg font-black text-white flex items-center gap-3 tracking-tighter uppercase whitespace-nowrap">
-              <div className="p-1.5 bg-brand-600 rounded-lg"><ShieldCheck size={20} className="text-white" /></div>
-              SafeHome <span className="text-brand-500">Ops</span>
-            </h1>
+            <img src="/logo.jpg" alt="SafeHome Ops" className="h-8 w-auto object-contain" />
+            <span className="text-brand-500 font-black text-sm hidden sm:inline">SafeHome Ops</span>
             <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-slate-500 hover:text-white">
                <X size={20} />
             </button>

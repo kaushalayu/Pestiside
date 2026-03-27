@@ -87,6 +87,22 @@ const Expenses = () => {
     onError: (err) => toast.error('Veto failed'),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.delete(`/expenses/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['expenses']);
+      queryClient.invalidateQueries(['expenseStats']);
+      toast.success('Expense Ledger Entry Purged');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Purge Authorization Denied')
+  });
+
+  const handleDelete = (expense) => {
+    if (window.confirm(`Protocol Alert: Are you sure you want to PURGE this expense entry?`)) {
+      deleteMutation.mutate(expense._id);
+    }
+  };
+
   if (isLoading) {
     return (
        <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
@@ -150,15 +166,16 @@ const Expenses = () => {
 
          <div className="overflow-x-auto">
             <table className="w-full">
-               <thead>
-                  <tr className="bg-slate-900 text-white">
-                     <th className="px-6 py-4 text-left text-[9px] uppercase tracking-widest font-black">Entity</th>
-                     <th className="px-6 py-4 text-left text-[9px] uppercase tracking-widest font-black">Category</th>
-                     <th className="px-6 py-4 text-left text-[9px] uppercase tracking-widest font-black">Amount (₹)</th>
-                     <th className="px-6 py-4 text-left text-[9px] uppercase tracking-widest font-black">Status</th>
-                     <th className="px-6 py-4 text-left text-[9px] uppercase tracking-widest font-black">Audit</th>
-                  </tr>
-               </thead>
+                 <thead>
+                   <tr className="bg-slate-900 text-white">
+                      <th className="px-6 py-4 text-left text-[9px] uppercase tracking-widest font-black">Entity</th>
+                      <th className="px-6 py-4 text-left text-[9px] uppercase tracking-widest font-black">Category</th>
+                      <th className="px-6 py-4 text-left text-[9px] uppercase tracking-widest font-black">Amount (₹)</th>
+                      <th className="px-6 py-4 text-left text-[9px] uppercase tracking-widest font-black">Status</th>
+                      <th className="px-6 py-4 text-left text-[9px] uppercase tracking-widest font-black">Audit</th>
+                      <th className="px-6 py-4 text-left text-[9px] uppercase tracking-widest font-black">Actions</th>
+                   </tr>
+                </thead>
                <tbody className="divide-y divide-slate-50">
                   {expenses?.map((expense) => (
                      <tr key={expense._id} className="hover:bg-slate-50 transition-colors">
@@ -203,6 +220,15 @@ const Expenses = () => {
                                  </div>
                               )}
                            </div>
+                        </td>
+                        <td className="px-6 py-4">
+                           <button 
+                              onClick={() => handleDelete(expense)}
+                              className="p-2 bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-all"
+                              title="Purge Entry"
+                           >
+                              <Trash2 size={14} />
+                           </button>
                         </td>
                      </tr>
                   ))}

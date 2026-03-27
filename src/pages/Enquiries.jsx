@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Mail, Plus, Search, CheckCircle2, Phone, Target, ArrowRight, DownloadCloud, User, MapPin, Tag, Activity, Clock, ShieldCheck, Database, X } from 'lucide-react';
+import { Mail, Plus, Search, CheckCircle2, Phone, Target, ArrowRight, DownloadCloud, User, MapPin, Tag, Activity, Clock, ShieldCheck, Database, X, Trash2 } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 
@@ -69,6 +69,22 @@ const Enquiries = () => {
     }
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.delete(`/enquiries/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['enquiries']);
+      queryClient.invalidateQueries(['funnel']);
+      toast.success('Lead Purge Complete');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Purge Authorization Denied')
+  });
+
+  const handleDelete = (enquiry) => {
+    if (window.confirm(`Protocol Alert: Are you sure you want to PURGE lead ${enquiry.customerName}?`)) {
+      deleteMutation.mutate(enquiry._id);
+    }
+  };
+
   if (isLoading) {
     return (
        <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
@@ -125,14 +141,19 @@ const Enquiries = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
          {filteredEnquiries?.map((enquiry) => (
             <div key={enquiry._id} className="bg-white rounded-[2rem] border border-slate-100 hover:border-slate-900 p-6 md:p-8 transition-all group relative overflow-hidden flex flex-col min-h-[400px]">
-               <div className="flex justify-between items-start mb-6">
-                  <span className={`px-3 py-1 rounded-lg border text-[8px] font-black uppercase tracking-widest ${STATUS_CONFIG[enquiry.status]?.color}`}>
-                     {STATUS_CONFIG[enquiry.status]?.label}
-                  </span>
-                  <div className="text-[8px] font-black text-slate-400">
-                     {new Date(enquiry.createdAt).toLocaleDateString()}
-                  </div>
-               </div>
+                <div className="flex justify-between items-start mb-6">
+                   <span className={`px-3 py-1 rounded-lg border text-[8px] font-black uppercase tracking-widest ${STATUS_CONFIG[enquiry.status]?.color}`}>
+                      {STATUS_CONFIG[enquiry.status]?.label}
+                   </span>
+                   <div className="flex items-center gap-2">
+                      <button onClick={() => handleDelete(enquiry)} className="p-1.5 bg-slate-50 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600 transition-colors" title="Purge Lead">
+                         <Trash2 size={14} />
+                      </button>
+                      <div className="text-[8px] font-black text-slate-400">
+                         {new Date(enquiry.createdAt).toLocaleDateString()}
+                      </div>
+                   </div>
+                </div>
 
                <div className="space-y-4 mb-8 flex-1">
                   <h3 className="text-lg font-black text-slate-900 leading-none uppercase truncate group-hover:text-brand-600 transition-colors">

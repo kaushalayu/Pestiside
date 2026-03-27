@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Building2, Plus, Search, MapPin, Mail, Phone, ShieldCheck, Edit3 } from 'lucide-react';
+import { Building2, Plus, Search, MapPin, Mail, Phone, ShieldCheck, Edit3, Trash2 } from 'lucide-react';
 import api from '../lib/api';
+import toast from 'react-hot-toast';
 
 const fetchBranches = async () => (await api.get('/branches')).data.data;
 
@@ -26,11 +27,28 @@ const Branches = () => {
       queryClient.invalidateQueries(['stats']);
       setIsModalOpen(false);
       setFormData({ branchName: '', city: '', cityPrefix: '', address: '', phone: '', email: '' });
+      toast.success('Branch Registry Updated');
     },
     onError: (err) => {
-      alert(err.response?.data?.message || 'Failed to create branch');
+      toast.error(err.response?.data?.message || 'Failed to update branch');
     }
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.delete(`/branches/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['branches']);
+      queryClient.invalidateQueries(['stats']);
+      toast.success('Branch Franchise Purged');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Purge Authorization Denied')
+  });
+
+  const handleDelete = (branch) => {
+    if (window.confirm(`Protocol Alert: Are you sure you want to PURGE franchise ${branch.branchName}?`)) {
+      deleteMutation.mutate(branch._id);
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -76,11 +94,14 @@ const Branches = () => {
                    </div>
                 </div>
 
-                <div className="absolute top-4 right-4 z-20">
-                   <button onClick={() => { setFormData({ ...branch }); setIsModalOpen(true); }} className="p-2 bg-slate-50 hover:bg-brand-50 rounded-lg text-slate-400 hover:text-brand-600 border border-slate-100 transition-colors shadow-sm" title="Edit Master Records">
-                      <Edit3 size={16} />
-                   </button>
-                </div>
+                <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+                    <button onClick={() => { setFormData({ ...branch }); setIsModalOpen(true); }} className="p-2 bg-slate-50 hover:bg-brand-50 rounded-lg text-slate-400 hover:text-brand-600 border border-slate-100 transition-colors shadow-sm" title="Edit Master Records">
+                       <Edit3 size={16} />
+                    </button>
+                    <button onClick={() => handleDelete(branch)} className="p-2 bg-slate-50 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600 border border-slate-100 transition-colors shadow-sm" title="Purge Branch">
+                       <Trash2 size={16} />
+                    </button>
+                 </div>
                 
                 <div className="space-y-3 relative z-10 mt-6">
                    <div className="flex items-center gap-3 text-sm text-slate-600 font-medium">
