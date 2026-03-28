@@ -90,6 +90,7 @@ const CreateForm = () => {
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isLoadingForm, setIsLoadingForm] = useState(false);
+  const [selectedAMC, setSelectedAMC] = useState(null);
   const startFileRef = useRef(null);
   const endFileRef = useRef(null);
 
@@ -118,6 +119,35 @@ const CreateForm = () => {
     },
     enabled: customerSearch.length >= 2
   });
+
+  const { data: amcList } = useQuery({
+    queryKey: ['amcs', formData.customer.phone],
+    queryFn: async () => {
+      if (!formData.customer.phone) return [];
+      const res = await api.get(`/amc?customerPhone=${formData.customer.phone}`);
+      return res.data.data || [];
+    },
+    enabled: !!formData.customer.phone
+  });
+
+  const handleSelectAMC = (amc) => {
+    if (selectedAMC?._id === amc._id) {
+      setSelectedAMC(null);
+    } else {
+      setSelectedAMC(amc);
+      setFormData(prev => ({
+        ...prev,
+        contract: {
+          ...prev.contract,
+          contractNo: amc.contractNo,
+          startDate: amc.startDate ? new Date(amc.startDate).toISOString().split('T')[0] : '',
+          endDate: amc.endDate ? new Date(amc.endDate).toISOString().split('T')[0] : '',
+          period: amc.period
+        },
+        amcServices: amc.servicesIncluded || []
+      }));
+    }
+  };
 
   const handleSelectCustomer = (customer) => {
     setFormData(prev => ({
@@ -483,6 +513,40 @@ const CreateForm = () => {
                   <Input type="email" className="pl-10" value={formData.customer.email} onChange={e => handleNestedChange('customer', 'email', e.target.value)} placeholder="Email (Optional)" />
                 </div>
               </div>
+
+              {amcList && amcList.length > 0 && (
+                <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileText size={14} className="text-amber-600" />
+                    <Label className="mb-0 text-amber-800">Existing AMC Contracts Found</Label>
+                  </div>
+                  <div className="space-y-2">
+                    {amcList.map(amc => (
+                      <button
+                        key={amc._id}
+                        type="button"
+                        onClick={() => handleSelectAMC(amc)}
+                        className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
+                          selectedAMC?._id === amc._id 
+                            ? 'bg-amber-600 border-amber-600 text-white' 
+                            : 'bg-white border-amber-200 hover:border-amber-400'
+                        }`}
+                      >
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="text-xs font-bold">{amc.contractNo}</p>
+                            <p className="text-[10px] opacity-80">{amc.serviceType} - {amc.period} months</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs font-bold">₹{amc.totalAmount?.toLocaleString('en-IN')}</p>
+                            <p className={`text-[9px] ${amc.status === 'ACTIVE' ? 'text-emerald-200' : 'text-red-200'}`}>{amc.status}</p>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-3">
                 <div className="flex items-center gap-2">

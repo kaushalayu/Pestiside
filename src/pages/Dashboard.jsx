@@ -18,6 +18,14 @@ const fetchStats = async () => (await api.get('/dashboard/stats')).data.data;
 const fetchRevenue = async () => (await api.get('/dashboard/revenue')).data.data;
 const fetchFunnel = async () => (await api.get('/dashboard/enquiry-funnel')).data.data;
 const fetchActivity = async () => (await api.get('/dashboard/activity')).data.data;
+const fetchExpiringAMCs = async () => {
+  const res = await api.get('/amc/expiring?days=30');
+  return res.data.data || [];
+};
+const fetchActiveAMCs = async () => {
+  const res = await api.get('/amc?status=ACTIVE&limit=5');
+  return res.data.data || [];
+};
 const fetchExpenses = async () => (await api.get('/expenses/stats')).data.data;
 const fetchCollections = async () => (await api.get('/collections/stats')).data.data;
 const fetchEmployeePerformance = async () => (await api.get('/dashboard/employee-performance')).data.data;
@@ -95,6 +103,14 @@ const Dashboard = () => {
 
   const { data: employeePerformance } = useQuery({
     queryKey: ['employeePerformance'], queryFn: fetchEmployeePerformance, enabled: isAdmin
+  });
+
+  const { data: expiringAMCs } = useQuery({
+    queryKey: ['expiringAMCs'], queryFn: fetchExpiringAMCs, enabled: isAdmin
+  });
+
+  const { data: activeAMCs } = useQuery({
+    queryKey: ['activeAMCs'], queryFn: fetchActiveAMCs, enabled: isAdmin
   });
 
   const isLoading = statsLoading || revLoading || funnelLoading || actLoading || expLoading || collLoading;
@@ -295,6 +311,63 @@ const Dashboard = () => {
         <StatCard title="Booking (Month)" value={stats?.forms?.month || 0} subtitle="Recent Activity" icon={FileText} trend={true} />
         <StatCard title="Transit Log" value={`${stats?.totalDistance || 0} KM`} subtitle="Total Deployment" icon={Truck} trend={true} />
       </div>
+
+      {/* AMC Widget */}
+      {isAdmin && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Expiring Soon */}
+          <div className="bg-white rounded-3xl border-2 border-slate-100 p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-slate-900 uppercase text-sm tracking-wider flex items-center gap-2">
+                <AlertCircle size={16} className="text-amber-500" /> Expiring Soon (30 Days)
+              </h3>
+              <Link to="/amc" className="text-xs font-bold text-brand-600 hover:text-brand-700">View All</Link>
+            </div>
+            <div className="space-y-3">
+              {expiringAMCs?.length > 0 ? expiringAMCs.slice(0, 4).map(amc => (
+                <div key={amc._id} className="flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100">
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">{amc.customerName}</p>
+                    <p className="text-[10px] text-slate-500">{amc.contractNo} • {amc.serviceType}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-bold text-amber-600">₹{amc.balanceAmount?.toLocaleString('en-IN')}</p>
+                    <p className="text-[9px] text-amber-500">{new Date(amc.endDate).toLocaleDateString('en-IN')}</p>
+                  </div>
+                </div>
+              )) : (
+                <p className="text-xs text-slate-400 text-center py-4">No AMCs expiring soon</p>
+              )}
+            </div>
+          </div>
+
+          {/* Active AMCs */}
+          <div className="bg-white rounded-3xl border-2 border-slate-100 p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-slate-900 uppercase text-sm tracking-wider flex items-center gap-2">
+                <ShieldCheck size={16} className="text-emerald-500" /> Active Contracts
+              </h3>
+              <Link to="/amc" className="text-xs font-bold text-brand-600 hover:text-brand-700">View All</Link>
+            </div>
+            <div className="space-y-3">
+              {activeAMCs?.length > 0 ? activeAMCs.map(amc => (
+                <div key={amc._id} className="flex items-center justify-between p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">{amc.customerName}</p>
+                    <p className="text-[10px] text-slate-500">{amc.contractNo}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-bold text-emerald-600">₹{amc.totalAmount?.toLocaleString('en-IN')}</p>
+                    <p className="text-[9px] text-emerald-500">{amc.period} months</p>
+                  </div>
+                </div>
+              )) : (
+                <p className="text-xs text-slate-400 text-center py-4">No active contracts</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
