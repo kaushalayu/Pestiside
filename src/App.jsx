@@ -10,6 +10,8 @@ import Dashboard from './pages/Dashboard';
 import Forms from './pages/Forms';
 import CreateForm from './pages/CreateForm';
 import Branches from './pages/Branches';
+import Customers from './pages/Customers';
+import AMC from './pages/AMC';
 import Employees from './pages/Employees';
 import Enquiries from './pages/Enquiries';
 import Receipts from './pages/Receipts';
@@ -17,6 +19,7 @@ import Collections from './pages/Collections';
 import Inventory from './pages/Inventory';
 import Expenses from './pages/Expenses';
 import Reports from './pages/Reports';
+import Settings from './pages/Settings';
 import FormDetail from './pages/FormDetail';
 
 const ProtectedRoute = ({ children }) => {
@@ -40,6 +43,8 @@ const App = () => {
           {/* Sub routes will append here later */}
           <Route index element={<Dashboard />} />
           <Route path="branches" element={<Branches />} />
+          <Route path="customers" element={<Customers />} />
+          <Route path="amc" element={<AMC />} />
           <Route path="employees" element={<Employees />} />
           <Route path="enquiries" element={<Enquiries />} />
           <Route path="receipts" element={<Receipts />} />
@@ -50,6 +55,7 @@ const App = () => {
           <Route path="forms/create" element={<CreateForm />} />
           <Route path="forms/:id" element={<FormDetail />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
     </BrowserRouter>

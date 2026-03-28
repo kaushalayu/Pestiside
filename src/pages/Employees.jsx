@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, Plus, Search, MapPin, Mail, Phone, ShieldCheck, Contact, Key, Image as ImageIcon, Edit3, X, AlertCircle, Trash2 } from 'lucide-react';
+import { useSelector } from 'react-redux';
+import { Users, Plus, Search, MapPin, Mail, Phone, ShieldCheck, Contact, Key, Image as ImageIcon, Edit3, X, AlertCircle, Trash2, Lock } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 
@@ -8,9 +9,11 @@ const fetchEmployees = async () => (await api.get('/employees')).data.data;
 const fetchBranches = async () => (await api.get('/branches')).data.data;
 
 const Employees = () => {
+  const { user } = useSelector(state => state.auth);
+  const isAdmin = user?.role === 'super_admin' || user?.role === 'branch_admin';
   const queryClient = useQueryClient();
   const { data: employees, isLoading } = useQuery({ queryKey: ['employees'], queryFn: fetchEmployees });
-  const { data: branches } = useQuery({ queryKey: ['branches'], queryFn: fetchBranches });
+  const { data: branches } = useQuery({ queryKey: ['branches'], queryFn: fetchBranches, enabled: isAdmin });
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
@@ -108,6 +111,28 @@ const Employees = () => {
       default: return 'bg-slate-100 text-slate-700 border-slate-200';
     }
   };
+
+  if (!isAdmin) {
+    return (
+      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500 pb-24 font-sans">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div>
+            <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
+              <Users className="w-8 h-8 text-brand-600" /> Human Resource Registry
+            </h2>
+            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mt-1 italic">Access Restricted</p>
+          </div>
+        </div>
+        <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-12 flex flex-col items-center justify-center">
+           <div className="p-4 bg-slate-100 rounded-full mb-4">
+              <Lock size={48} className="text-slate-400" />
+           </div>
+           <h2 className="text-lg font-black text-slate-900 uppercase tracking-widest mb-2">Authorization Required</h2>
+           <p className="text-sm text-slate-500 font-medium">This module is restricted to Branch Admin and Super Admin only.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500 relative z-10 pb-24 font-sans">

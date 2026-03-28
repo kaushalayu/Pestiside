@@ -16,7 +16,7 @@ const Receipts = () => {
   const { data: branches } = useQuery({
     queryKey: ['branches'],
     queryFn: fetchBranches,
-    enabled: user?.role === 'super_admin'
+    enabled: user?.role === 'super_admin' || user?.role === 'branch_admin'
   });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -24,16 +24,23 @@ const Receipts = () => {
   const [viewReceipt, setViewReceipt] = useState(null);
   const [search, setSearch] = useState('');
 
+  const getDefaultBranchId = () => {
+    if (user?.role !== 'super_admin' && user?.branchId) {
+      return typeof user.branchId === 'object' ? user.branchId._id : user.branchId;
+    }
+    return '';
+  };
+
   const [formData, setFormData] = useState({
     customerName: '', customerEmail: '', customerPhone: '',
     serviceDescription: '', amount: '', advancePaid: '',
-    paymentMode: 'CASH', chequeNo: '', branchId: '', notes: ''
+    paymentMode: 'CASH', chequeNo: '', branchId: getDefaultBranchId(), notes: ''
   });
 
   const resetForm = () => setFormData({
     customerName: '', customerEmail: '', customerPhone: '',
     serviceDescription: '', amount: '', advancePaid: '',
-    paymentMode: 'CASH', chequeNo: '', branchId: '', notes: ''
+    paymentMode: 'CASH', chequeNo: '', branchId: getDefaultBranchId(), notes: ''
   });
 
   const mutation = useMutation({

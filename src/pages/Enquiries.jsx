@@ -102,9 +102,15 @@ const Enquiries = () => {
     );
   }
 
-  const filteredEnquiries = activeBoard === 'ALL' 
-    ? rawEnquiries 
-    : rawEnquiries?.filter(e => e.status === activeBoard);
+  const filteredEnquiries = rawEnquiries
+    ?.filter(e => {
+      const matchesBoard = activeBoard === 'ALL' || e.status === activeBoard;
+      const matchesSearch = !search || 
+        e.customerName?.toLowerCase().includes(search.toLowerCase()) || 
+        e.mobile?.includes(search) ||
+        e.city?.toLowerCase().includes(search.toLowerCase());
+      return matchesBoard && matchesSearch;
+    }) || [];
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-500 pb-20">

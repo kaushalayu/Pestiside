@@ -1,13 +1,22 @@
 import React, { useState, useEffect } from 'react';
+import { useSelector } from 'react-redux';
 import api from '../lib/api';
-import { IndianRupee, TrendingUp, Users as UsersIcon, Calendar, Filter, Database, Wallet, CreditCard, ChevronRight, RefreshCw } from 'lucide-react';
+import { IndianRupee, TrendingUp, Users as UsersIcon, Calendar, Filter, Database, Wallet, CreditCard, ChevronRight, RefreshCw, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const Collections = () => {
+  const { user } = useSelector(state => state.auth);
+  const isAdmin = user?.role === 'super_admin' || user?.role === 'branch_admin';
   const [loading, setLoading] = useState(true);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [data, setData] = useState({ summary: { totalOverall: 0, totalToday: 0 }, details: [] });
 
   const fetchCollections = async () => {
+    if (!isAdmin) {
+      setAccessDenied(true);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       const res = await api.get('/collections/stats');
@@ -15,7 +24,11 @@ const Collections = () => {
         setData(res.data.data);
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Collection Ledger Unavailable');
+      if (error.response?.status === 403) {
+        setAccessDenied(true);
+      } else {
+        toast.error(error.response?.data?.message || 'Collection Ledger Unavailable');
+      }
     } finally {
       setLoading(false);
     }
@@ -23,13 +36,36 @@ const Collections = () => {
 
   useEffect(() => {
     fetchCollections();
-  }, []);
+  }, [user]);
 
   if (loading) {
     return (
       <div className="flex flex-col h-screen items-center justify-center gap-4">
         <div className="w-8 h-8 rounded-xl border-4 border-slate-900 border-t-emerald-500 animate-spin"></div>
         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Auditing Revenue...</p>
+      </div>
+    );
+  }
+
+  if (accessDenied) {
+    return (
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-500 pb-20">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-xl md:text-2xl font-display font-black text-slate-900 tracking-tight uppercase">Revenue Ledger</h1>
+            <p className="text-slate-500 mt-1 font-bold uppercase text-[8px] tracking-wider italic flex items-center gap-2">
+               <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
+               Access Restricted
+            </p>
+          </div>
+        </div>
+        <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-12 flex flex-col items-center justify-center">
+          <div className="p-4 bg-slate-100 rounded-full mb-4">
+            <Lock size={48} className="text-slate-400" />
+          </div>
+          <h2 className="text-lg font-black text-slate-900 uppercase tracking-widest mb-2">Authorization Required</h2>
+          <p className="text-sm text-slate-500 font-medium">This section is restricted to Branch Admin and Super Admin only.</p>
+        </div>
       </div>
     );
   }

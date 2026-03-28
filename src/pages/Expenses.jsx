@@ -39,12 +39,13 @@ const Expenses = () => {
   });
 
   const { data: stats } = useQuery({ 
-     queryKey: ['expenseStats'], 
-     queryFn: async () => {
-        const res = await api.get('/expenses/stats');
-        return res.data?.data || { todayTotal: 0, overallTotal: 0 };
-     }
-  });
+      queryKey: ['expenseStats'], 
+      queryFn: async () => {
+         const res = await api.get('/expenses/stats');
+         return res.data?.data || { todayTotal: 0, overallTotal: 0 };
+      },
+      enabled: isAdmin
+   });
 
   const { data: branches } = useQuery({ 
      queryKey: ['branches'], 
@@ -52,8 +53,15 @@ const Expenses = () => {
         const res = await api.get('/branches');
         return res.data?.data || [];
      },
-     enabled: user?.role === 'super_admin'
+     enabled: user?.role === 'super_admin' || user?.role === 'branch_admin'
   });
+
+  const getDefaultBranchId = () => {
+    if (user?.role !== 'super_admin' && user?.branchId) {
+      return typeof user.branchId === 'object' ? user.branchId._id : user.branchId;
+    }
+    return '';
+  };
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editExpense, setEditExpense] = useState(null);
@@ -63,7 +71,7 @@ const Expenses = () => {
     description: '',
     date: new Date().toISOString().split('T')[0],
     receiptNote: '',
-    branchId: '',
+    branchId: getDefaultBranchId(),
   });
 
   const createMutation = useMutation({
@@ -74,7 +82,7 @@ const Expenses = () => {
       setIsModalOpen(false);
       setEditExpense(null);
       toast.success('Disbursement recorded');
-      setFormData({ category: 'Travel', amount: '', description: '', date: new Date().toISOString().split('T')[0], receiptNote: '', branchId: '' });
+      setFormData({ category: 'Travel', amount: '', description: '', date: new Date().toISOString().split('T')[0], receiptNote: '', branchId: getDefaultBranchId() });
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Access denied'),
   });

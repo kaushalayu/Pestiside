@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Building2, Plus, Search, MapPin, Mail, Phone, ShieldCheck, Edit3, Trash2 } from 'lucide-react';
+import { useSelector } from 'react-redux';
+import { Building2, Plus, Search, MapPin, Mail, Phone, ShieldCheck, Edit3, Trash2, Lock, Power, PowerOff } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 
 const fetchBranches = async () => (await api.get('/branches')).data.data;
 
 const Branches = () => {
+  const { user } = useSelector(state => state.auth);
+  const isSuperAdmin = user?.role === 'super_admin';
   const queryClient = useQueryClient();
   const { data: branches, isLoading } = useQuery({ queryKey: ['branches'], queryFn: fetchBranches });
   
@@ -14,7 +17,7 @@ const Branches = () => {
   const [formData, setFormData] = useState({
     branchName: '',
     city: '',
-    cityPrefix: '', // e.g. LKO
+    cityPrefix: '',
     address: '',
     phone: '',
     email: ''
@@ -33,6 +36,19 @@ const Branches = () => {
       toast.error(err.response?.data?.message || 'Failed to update branch');
     }
   });
+
+  const toggleStatusMutation = useMutation({
+    mutationFn: ({ id, isActive }) => api.patch(`/branches/${id}/status`, { isActive }),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['branches']);
+      toast.success('Branch status updated');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to update status')
+  });
+
+  const handleToggleStatus = (branch) => {
+    toggleStatusMutation.mutate({ id: branch._id, isActive: !branch.isActive });
+  };
 
   const deleteMutation = useMutation({
     mutationFn: (id) => api.delete(`/branches/${id}`),
@@ -54,6 +70,28 @@ const Branches = () => {
     e.preventDefault();
     mutation.mutate(formData);
   };
+
+  if (!isSuperAdmin) {
+    return (
+      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-fade-in relative z-10 pb-24">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-display font-bold text-slate-800 tracking-tight flex items-center gap-2">
+              <Building2 className="w-6 h-6 text-brand-500" /> Branch Network
+            </h2>
+            <p className="text-slate-500 text-sm mt-1 font-medium">Access Restricted</p>
+          </div>
+        </div>
+        <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-12 flex flex-col items-center justify-center">
+           <div className="p-4 bg-slate-100 rounded-full mb-4">
+              <Lock size={48} className="text-slate-400" />
+           </div>
+           <h2 className="text-lg font-black text-slate-900 uppercase tracking-widest mb-2">Authorization Required</h2>
+           <p className="text-sm text-slate-500 font-medium">Branch management is restricted to Super Admin only.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-fade-in relative z-10 pb-24">
@@ -95,6 +133,9 @@ const Branches = () => {
                 </div>
 
                 <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+                    <button onClick={() => handleToggleStatus(branch)} className={`p-2 rounded-lg border border-slate-100 transition-colors shadow-sm ${branch.isActive ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-600' : 'bg-slate-50 hover:bg-slate-100 text-slate-400'}`} title={branch.isActive ? 'Deactivate Branch' : 'Activate Branch'}>
+                       {branch.isActive ? <Power size={16} /> : <PowerOff size={16} />}
+                    </button>
                     <button onClick={() => { setFormData({ ...branch }); setIsModalOpen(true); }} className="p-2 bg-slate-50 hover:bg-brand-50 rounded-lg text-slate-400 hover:text-brand-600 border border-slate-100 transition-colors shadow-sm" title="Edit Master Records">
                        <Edit3 size={16} />
                     </button>

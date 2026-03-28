@@ -1,6 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell 
@@ -8,7 +9,7 @@ import {
 import { 
   Users, FileText, Building2, TrendingUp, Activity, 
   IndianRupee, PieChart as PieIcon, ArrowRight, Truck,
-  ArrowUpRight, Sparkles
+  ArrowUpRight, Sparkles, ShieldCheck
 } from 'lucide-react';
 import api from '../lib/api';
 
@@ -16,6 +17,8 @@ const fetchStats   = async () => (await api.get('/dashboard/stats')).data.data;
 const fetchRevenue = async () => (await api.get('/dashboard/revenue')).data.data;
 const fetchFunnel  = async () => (await api.get('/dashboard/enquiry-funnel')).data.data;
 const fetchActivity= async () => (await api.get('/dashboard/activity')).data.data;
+const fetchExpenses = async () => (await api.get('/expenses/stats')).data.data;
+const fetchCollections = async () => (await api.get('/collections/stats')).data.data;
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 
@@ -60,19 +63,62 @@ const RevenueTooltip = ({ active, payload, label }) => {
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { user } = useSelector(state => state.auth);
+  const isAdmin = user?.role === 'super_admin' || user?.role === 'branch_admin';
 
-  const { data: stats,    isLoading: statsLoading }  = useQuery({ queryKey: ['stats'],    queryFn: fetchStats });
-  const { data: revenue,  isLoading: revLoading }    = useQuery({ queryKey: ['revenue'],  queryFn: fetchRevenue });
-  const { data: funnel,   isLoading: funnelLoading } = useQuery({ queryKey: ['funnel'],   queryFn: fetchFunnel });
-  const { data: activity, isLoading: actLoading }    = useQuery({ queryKey: ['activity'], queryFn: fetchActivity });
+  const { data: stats,    isLoading: statsLoading,    error: statsError }  = useQuery({ 
+    queryKey: ['stats'],    queryFn: fetchStats,    enabled: isAdmin 
+  });
+  const { data: revenue,  isLoading: revLoading,    error: revError }  = useQuery({ 
+    queryKey: ['revenue'],  queryFn: fetchRevenue,  enabled: isAdmin 
+  });
+  const { data: funnel,   isLoading: funnelLoading, error: funnelError } = useQuery({ 
+    queryKey: ['funnel'],   queryFn: fetchFunnel,  enabled: isAdmin 
+  });
+  const { data: activity, isLoading: actLoading,   error: actError } = useQuery({ 
+    queryKey: ['activity'], queryFn: fetchActivity, enabled: isAdmin 
+  });
 
-  const isLoading = statsLoading || revLoading || funnelLoading || actLoading;
+  const { data: expenseStats, isLoading: expLoading } = useQuery({
+    queryKey: ['expenseStats'], queryFn: fetchExpenses, enabled: isAdmin
+  });
+
+  const { data: collectionStats, isLoading: collLoading } = useQuery({
+    queryKey: ['collectionStats'], queryFn: fetchCollections, enabled: isAdmin
+  });
+
+  const isLoading = statsLoading || revLoading || funnelLoading || actLoading || expLoading || collLoading;
 
   if (isLoading) {
     return (
       <div className="flex flex-col h-full items-center justify-center p-8 min-h-[400px] gap-5">
         <div className="w-14 h-14 rounded-2xl border-4 border-slate-200 border-t-brand-500 animate-spin shadow-lg"></div>
         <p className="text-slate-400 font-semibold uppercase tracking-widest text-sm animate-pulse">Synchronizing metrics...</p>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-500 pb-20">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+           <div>
+              <h1 className="text-2xl md:text-3xl font-display font-bold text-slate-900 tracking-tight uppercase leading-none">Dashboard</h1>
+              <div className="flex items-center gap-3 mt-3">
+                 <div className="flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-full">
+                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Welcome back, {user?.name}</span>
+                 </div>
+              </div>
+           </div>
+        </div>
+        <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-12 flex flex-col items-center justify-center">
+           <div className="p-4 bg-slate-100 rounded-full mb-4">
+              <ShieldCheck size={48} className="text-slate-400" />
+           </div>
+           <h2 className="text-lg font-black text-slate-900 uppercase tracking-widest mb-2">Analytics Restricted</h2>
+           <p className="text-sm text-slate-500 font-medium text-center max-w-md">Dashboard analytics are available only for Branch Admins and Super Admins.<br/>Your daily performance metrics are available in your respective modules.</p>
+        </div>
       </div>
     );
   }

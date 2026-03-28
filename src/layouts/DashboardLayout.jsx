@@ -4,7 +4,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../store/slices/authSlice';
 import { 
   LogOut, LayoutDashboard, ShieldCheck, Mail, Users, Building2, 
-  FileText, IndianRupee, Wallet, Package, Receipt, Menu, X, ChevronRight, Bell, Activity, BarChart3
+  FileText, IndianRupee, Wallet, Package, Receipt, Menu, X, ChevronRight, Bell, Activity, BarChart3, Settings
 } from 'lucide-react';
 
 const DashboardLayout = () => {
@@ -19,8 +19,10 @@ const DashboardLayout = () => {
 
   const navLinks = [
     { to: '/', icon: <LayoutDashboard size={18} />, label: 'Dashboard', roles: ['super_admin', 'branch_admin', 'technician', 'sales', 'office'] },
-    { to: '/branches', icon: <Building2 size={18} />, label: 'Branches', roles: ['super_admin', 'branch_admin'] },
-    { to: '/forms', icon: <FileText size={18} />, label: 'Service Forms', roles: ['super_admin', 'branch_admin', 'technician', 'sales', 'office'] },
+    { to: '/branches', icon: <Building2 size={18} />, label: 'Branches', roles: ['super_admin'] },
+    { to: '/customers', icon: <ShieldCheck size={18} />, label: 'Customers', roles: ['super_admin', 'branch_admin', 'technician', 'sales', 'office'] },
+    { to: '/amc', icon: <FileText size={18} />, label: 'AMC Contracts', roles: ['super_admin', 'branch_admin', 'office'] },
+    { to: '/forms', icon: <FileText size={18} />, label: 'Booking Form', roles: ['super_admin', 'branch_admin', 'technician', 'sales', 'office'] },
     { to: '/employees', icon: <Users size={18} />, label: 'Employees', roles: ['super_admin', 'branch_admin', 'office'] },
     { to: '/enquiries', icon: <Mail size={18} />, label: 'Enquiries', roles: ['super_admin', 'branch_admin', 'office'] },
     { to: '/receipts', icon: <IndianRupee size={18} />, label: 'Receipts', roles: ['super_admin', 'branch_admin', 'technician', 'sales', 'office'] },
@@ -28,6 +30,7 @@ const DashboardLayout = () => {
     { to: '/inventory', icon: <Package size={18} />, label: 'Inventory', roles: ['super_admin', 'branch_admin', 'technician', 'office'] },
     { to: '/expenses', icon: <Receipt size={18} />, label: 'Expenses', roles: ['super_admin', 'branch_admin', 'technician', 'sales', 'office'] },
     { to: '/reports', icon: <BarChart3 size={18} />, label: 'Reports', roles: ['super_admin', 'branch_admin', 'office'] },
+    { to: '/settings', icon: <ShieldCheck size={18} />, label: 'Settings', roles: ['super_admin', 'branch_admin'] },
   ];
 
   return (

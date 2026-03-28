@@ -53,6 +53,7 @@ const CreateForm = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useSelector(state => state.auth);
+  const isFieldStaff = user?.role === 'technician' || user?.role === 'sales';
 
   const [formData, setFormData] = useState({
     branchId: '',
@@ -85,7 +86,7 @@ const CreateForm = () => {
   const { data: branches } = useQuery({
     queryKey: ['branches'],
     queryFn: async () => (await api.get('/branches')).data.data,
-    enabled: user?.role === 'super_admin'
+    enabled: user?.role === 'super_admin' || user?.role === 'branch_admin'
   });
 
   const sigPadRefEmp = useRef(null);
@@ -96,7 +97,7 @@ const CreateForm = () => {
   const serviceOptions = ['Residential', 'Commercial', 'Industrial'];
   const scheduleOptions = ['Single', 'One Time', 'Monthly', 'Yearly'];
   const pMethodOptions = ['Drill', 'Fill', 'Seal'];
-  const paymentModes = ['Cash', 'Cheque', 'NEFT', 'Online', 'Pending'];
+  const paymentModes = ['Cash', 'Cheque', 'NEFT', 'Online', 'Wallet', 'Pending'];
   const premisesTypes = ['Bunglow', 'Flat', 'Building', 'Office', 'Factory', 'Warehouse', 'Hotel', 'Restaurant', 'Hospital', 'School', 'Other'];
   const constructionPhases = ['New Construction', 'Renovation', 'Existing Building', 'Vacant', 'Occupied'];
   const treatmentTypes = ['Pre-Construction', 'Post-Construction', 'General Pest Control', 'Termite Control', 'Fumigation'];
@@ -373,7 +374,8 @@ const CreateForm = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className={`grid grid-cols-1 gap-4 ${isFieldStaff ? 'lg:grid-cols-2' : 'lg:grid-cols-1'}`}>
+          {isFieldStaff && (
           <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
             <div className="bg-slate-800 px-4 py-2 flex items-center gap-2">
               <Truck size={14} className="text-white" />
@@ -418,6 +420,7 @@ const CreateForm = () => {
               </div>
             </div>
           </div>
+          )}
 
           <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
             <div className="bg-slate-800 px-4 py-2 flex items-center gap-2">

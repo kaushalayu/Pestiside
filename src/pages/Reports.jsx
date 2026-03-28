@@ -1,11 +1,40 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { BarChart3, Download, Calendar, FileText, Receipt, Users, TrendingUp, IndianRupee, Filter, X, ChevronRight } from 'lucide-react';
+import { useSelector } from 'react-redux';
+import { BarChart3, Download, Calendar, FileText, Receipt, Users, TrendingUp, IndianRupee, Filter, X, ChevronRight, Lock } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 
 const Reports = () => {
+  const { user } = useSelector(state => state.auth);
+  const isAdmin = user?.role === 'super_admin' || user?.role === 'branch_admin';
   const [reportType, setReportType] = useState('forms');
+
+  if (!isAdmin) {
+    return (
+      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-500 pb-24">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-xl md:text-2xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
+              <div className="p-2 bg-slate-900 text-white rounded-lg"><BarChart3 size={20} /></div>
+              Reports
+            </h1>
+            <p className="text-slate-500 mt-1 font-bold uppercase text-[8px] tracking-wider italic flex items-center gap-2">
+               <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
+               Access Restricted
+            </p>
+          </div>
+        </div>
+        <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-12 flex flex-col items-center justify-center">
+           <div className="p-4 bg-slate-100 rounded-full mb-4">
+              <Lock size={48} className="text-slate-400" />
+           </div>
+           <h2 className="text-lg font-black text-slate-900 uppercase tracking-widest mb-2">Authorization Required</h2>
+           <p className="text-sm text-slate-500 font-medium">This section is restricted to Branch Admin and Super Admin only.</p>
+        </div>
+      </div>
+    );
+  }
 
   const { data: formStats } = useQuery({
     queryKey: ['formStats'],

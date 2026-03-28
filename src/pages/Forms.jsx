@@ -47,14 +47,14 @@ const Forms = () => {
         <div>
           <h1 className="text-xl md:text-2xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
              <div className="p-2 bg-slate-900 text-white rounded-lg"><FileText size={20} /></div>
-             Service Registry
+             Booking Form
           </h1>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-2 italic">Comprehensive Operational Log</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-2 italic">Service Request Registry</p>
         </div>
         
         <div className="flex items-center gap-3 w-full md:w-auto">
           <Link to="/forms/create" className="flex-1 md:flex-none px-6 py-3 bg-brand-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all hover:bg-brand-500 active:scale-95 flex items-center justify-center gap-2 border-b-4 border-slate-900 shadow-none">
-            <Plus size={16} /> New Job Entry
+            <Plus size={16} /> New Booking
           </Link>
         </div>
       </div>
