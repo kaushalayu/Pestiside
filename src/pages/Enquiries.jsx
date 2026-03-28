@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Mail, Plus, Search, CheckCircle2, Phone, Target, ArrowRight, DownloadCloud, User, MapPin, Tag, Activity, Clock, ShieldCheck, Database, X, Trash2 } from 'lucide-react';
+import { Mail, Plus, Search as SearchIcon, CheckCircle2, Phone, Target, ArrowRight, DownloadCloud, User, MapPin, Tag, Activity, Clock, ShieldCheck, Database, X, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 
 const STATUS_CONFIG = {
   NEW: { color: 'bg-emerald-50 text-emerald-800 border-emerald-200', label: 'Fresh Inquiry' },
   CONTACTED: { color: 'bg-blue-50 text-blue-800 border-blue-200', label: 'In Progress' },
+  DEMO_SCHEDULED: { color: 'bg-amber-50 text-amber-800 border-amber-200', label: 'Demo Scheduled' },
   QUALIFIED: { color: 'bg-purple-50 text-purple-800 border-purple-200', label: 'Qualified' },
   CONVERTED: { color: 'bg-slate-900 text-white border-slate-900', label: 'Closed Win' },
   LOST: { color: 'bg-red-50 text-red-500 border-red-100', label: 'Declined' }
@@ -14,11 +15,19 @@ const STATUS_CONFIG = {
 
 const Enquiries = () => {
   const queryClient = useQueryClient();
-  const { data: rawEnquiries, isLoading } = useQuery({ 
-     queryKey: ['enquiries'], 
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [activeBoard, setActiveBoard] = useState('ALL');
+
+  const { data: rawEnquiries, isLoading, data: paginationData } = useQuery({ 
+     queryKey: ['enquiries', search, page], 
      queryFn: async () => {
         try {
-           const res = await api.get('/enquiries');
+           const params = new URLSearchParams();
+           if (search) params.append('search', search);
+           params.append('page', page);
+           params.append('limit', 12);
+           const res = await api.get(`/enquiries?${params.toString()}`);
            return res.data?.data || [];
         } catch (err) {
            toast.error('Pipeline Fault Detected');
@@ -36,7 +45,6 @@ const Enquiries = () => {
   });
   
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [activeBoard, setActiveBoard] = useState('ALL');
 
   const [formData, setFormData] = useState({
     customerName: '', mobile: '', city: '', requirement: '',
@@ -61,7 +69,7 @@ const Enquiries = () => {
   });
 
   const statusMutation = useMutation({
-    mutationFn: ({ id, status }) => api.patch(`/enquiries/${id}`, { status }),
+    mutationFn: ({ id, status }) => api.patch(`/enquiries/${id}/status`, { status }),
     onSuccess: () => {
       queryClient.invalidateQueries(['enquiries']);
       queryClient.invalidateQueries(['funnel']);
@@ -120,21 +128,33 @@ const Enquiries = () => {
       </div>
 
       {/* Control Panel */}
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white p-2 rounded-2xl border border-slate-100">
+      <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white p-4 rounded-2xl border border-slate-100">
          <div className="flex gap-1 overflow-x-auto scrollbar-hide">
-            {['ALL', 'NEW', 'CONTACTED', 'QUALIFIED', 'CONVERTED'].map(board => (
+            {['ALL', 'NEW', 'CONTACTED', 'DEMO_SCHEDULED', 'QUALIFIED', 'CONVERTED', 'LOST'].map(board => (
               <button
                 key={board}
-                onClick={() => setActiveBoard(board)}
-                className={`px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeBoard === board ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-900'}`}
+                onClick={() => { setActiveBoard(board); setPage(1); }}
+                className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeBoard === board ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-900'}`}
               >
-                {board === 'ALL' ? 'Cumulative' : board.replace('_', ' ')}
+                {board === 'ALL' ? 'Cumulative' : board.replace(/_/g, ' ')}
               </button>
             ))}
          </div>
-         <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest pr-4 border-l pl-4 border-slate-100 hidden md:block">
-            {filteredEnquiries?.length || 0} active components identified
+         <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest hidden md:block">
+            {filteredEnquiries?.length || 0} leads
          </div>
+      </div>
+
+      {/* Search Bar */}
+      <div className="relative">
+         <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+         <input
+            type="text"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            placeholder="Search by customer name or mobile..."
+            className="w-full pl-12 pr-4 py-3 bg-white border-2 border-slate-100 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none focus:border-brand-500 transition-all placeholder:text-slate-300"
+         />
       </div>
 
       {/* Leads Grid */}
@@ -171,22 +191,45 @@ const Enquiries = () => {
                </div>
 
                <div className="pt-6 border-t border-slate-100 group-hover:border-slate-900 transition-colors">
-                  <p className="text-[7px] font-black text-slate-300 uppercase tracking-[.3em] mb-4">Pipeline Auth Migrate</p>
-                  <div className="flex flex-wrap gap-2">
-                     {Object.keys(STATUS_CONFIG).filter(s => s !== enquiry.status).map(status => (
-                        <button 
-                           key={status}
-                           onClick={() => statusMutation.mutate({ id: enquiry._id, status })}
-                           className="px-3 py-1.5 bg-slate-50 hover:bg-slate-900 hover:text-white border border-slate-200 hover:border-slate-900 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all active:scale-95"
-                        >
-                           {status.replace('_', ' ')}
-                        </button>
-                     ))}
-                  </div>
-               </div>
-            </div>
-         ))}
-      </div>
+                   <p className="text-[7px] font-black text-slate-300 uppercase tracking-[.3em] mb-4">Pipeline Auth Migrate</p>
+                   <div className="flex flex-wrap gap-2">
+                      {Object.keys(STATUS_CONFIG).filter(s => s !== enquiry.status).map(status => (
+                         <button 
+                            key={status}
+                            onClick={() => statusMutation.mutate({ id: enquiry._id, status })}
+                            className="px-3 py-1.5 bg-slate-50 hover:bg-slate-900 hover:text-white border border-slate-200 hover:border-slate-900 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all active:scale-95"
+                         >
+                            {status.replace(/_/g, ' ')}
+                         </button>
+                      ))}
+                   </div>
+                </div>
+             </div>
+          ))}
+       </div>
+
+       {/* Pagination Controls */}
+       <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-100">
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+             Page {page}
+          </p>
+          <div className="flex items-center gap-2">
+             <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="p-2 bg-slate-100 text-slate-600 hover:bg-slate-900 hover:text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+             >
+                <ChevronLeft size={16} />
+             </button>
+             <button
+                onClick={() => setPage(p => p + 1)}
+                disabled={!rawEnquiries || rawEnquiries.length < 12}
+                className="p-2 bg-slate-100 text-slate-600 hover:bg-slate-900 hover:text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+             >
+                <ChevronRight size={16} />
+             </button>
+          </div>
+       </div>
 
       {/* Registration Modal */}
       {isModalOpen && (

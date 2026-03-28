@@ -4,7 +4,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../store/slices/authSlice';
 import { 
   LogOut, LayoutDashboard, ShieldCheck, Mail, Users, Building2, 
-  FileText, IndianRupee, Wallet, Package, Receipt, Menu, X, ChevronRight, Bell, Activity
+  FileText, IndianRupee, Wallet, Package, Receipt, Menu, X, ChevronRight, Bell, Activity, BarChart3
 } from 'lucide-react';
 
 const DashboardLayout = () => {
@@ -27,6 +27,7 @@ const DashboardLayout = () => {
     { to: '/collections', icon: <Wallet size={18} />, label: 'Collections', roles: ['super_admin', 'branch_admin', 'office'] },
     { to: '/inventory', icon: <Package size={18} />, label: 'Inventory', roles: ['super_admin', 'branch_admin', 'technician', 'office'] },
     { to: '/expenses', icon: <Receipt size={18} />, label: 'Expenses', roles: ['super_admin', 'branch_admin', 'technician', 'sales', 'office'] },
+    { to: '/reports', icon: <BarChart3 size={18} />, label: 'Reports', roles: ['super_admin', 'branch_admin', 'office'] },
   ];
 
   return (

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { IndianRupee, Plus, Search, MapPin, Download, CheckCircle2, AlertCircle, Mail, Eye, X, Send, RefreshCw } from 'lucide-react';
+import { IndianRupee, Plus, Search, MapPin, Download, CheckCircle2, AlertCircle, Mail, Eye, X, Send, RefreshCw, Edit3 } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
@@ -20,7 +20,8 @@ const Receipts = () => {
   });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [viewReceipt, setViewReceipt] = useState(null); // for detail modal
+  const [editReceipt, setEditReceipt] = useState(null);
+  const [viewReceipt, setViewReceipt] = useState(null);
   const [search, setSearch] = useState('');
 
   const [formData, setFormData] = useState({
@@ -40,11 +41,47 @@ const Receipts = () => {
     onSuccess: () => {
       queryClient.invalidateQueries(['receipts']);
       setIsModalOpen(false);
+      setEditReceipt(null);
       resetForm();
       toast.success('Receipt generated successfully!');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to generate receipt'),
   });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => api.patch(`/receipts/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['receipts']);
+      setIsModalOpen(false);
+      setEditReceipt(null);
+      resetForm();
+      toast.success('Receipt updated successfully!');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to update receipt'),
+  });
+
+  const handleEdit = (receipt) => {
+    setEditReceipt(receipt);
+    setFormData({
+      customerName: receipt.customerName || '',
+      customerEmail: receipt.customerEmail || '',
+      customerPhone: receipt.customerPhone || '',
+      serviceDescription: receipt.serviceDescription || '',
+      amount: receipt.amount || '',
+      advancePaid: receipt.advancePaid || '',
+      paymentMode: receipt.paymentMode || 'CASH',
+      chequeNo: receipt.chequeNo || '',
+      branchId: receipt.branchId?._id || '',
+      notes: receipt.notes || ''
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+    setEditReceipt(null);
+    resetForm();
+  };
 
   const resendMutation = useMutation({
     mutationFn: (id) => api.post(`/receipts/${id}/resend`),
@@ -58,11 +95,18 @@ const Receipts = () => {
       toast.error('Branch selection is mandatory for Head Office users.');
       return;
     }
-    mutation.mutate({
+    
+    const payload = {
       ...formData,
       amount: Number(formData.amount),
       advancePaid: Number(formData.advancePaid || 0),
-    });
+    };
+    
+    if (editReceipt) {
+      updateMutation.mutate({ id: editReceipt._id, data: payload });
+    } else {
+      mutation.mutate(payload);
+    }
   };
 
   const getStatusStyle = (status) => {
@@ -80,7 +124,7 @@ const Receipts = () => {
   );
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6 animate-fade-in pb-24">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 animate-fade-in pb-24">
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -172,6 +216,15 @@ const Receipts = () => {
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-center gap-2">
 
+                        {/* Edit Receipt */}
+                        <button
+                          onClick={() => handleEdit(rec)}
+                          title="Edit Receipt"
+                          className="p-2 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white transition-all"
+                        >
+                          <Edit3 size={15} />
+                        </button>
+
                         {/* View Details */}
                         <button
                           onClick={() => setViewReceipt(rec)}
@@ -182,15 +235,26 @@ const Receipts = () => {
                         </button>
 
                         {/* Download PDF */}
-                        <a
-                          href={`${import.meta.env.VITE_API_BASE_URL || ''}/api/receipts/${rec._id}/pdf`}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          onClick={async () => {
+                            try {
+                              const response = await api.get(`/receipts/${rec._id}/pdf`, { responseType: 'blob' });
+                              const url = window.URL.createObjectURL(new Blob([response.data]));
+                              const link = document.createElement('a');
+                              link.href = url;
+                              link.setAttribute('download', `Receipt_${rec.receiptNo || rec._id}.pdf`);
+                              document.body.appendChild(link);
+                              link.click();
+                              toast.success('Receipt PDF Downloaded');
+                            } catch (err) {
+                              toast.error('PDF Download Failed');
+                            }
+                          }}
                           title="Download PDF"
                           className="p-2 rounded-lg bg-brand-50 text-brand-600 hover:bg-brand-600 hover:text-white transition-all"
                         >
                           <Download size={15} />
-                        </a>
+                        </button>
 
                         {/* Resend Email */}
                         {rec.customerEmail && (
@@ -280,14 +344,25 @@ const Receipts = () => {
 
               {/* Actions */}
               <div className="flex gap-3 pt-2">
-                <a
-                  href={`${import.meta.env.VITE_API_BASE_URL || ''}/api/receipts/${viewReceipt._id}/pdf`}
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  onClick={async () => {
+                    try {
+                      const response = await api.get(`/receipts/${viewReceipt._id}/pdf`, { responseType: 'blob' });
+                      const url = window.URL.createObjectURL(new Blob([response.data]));
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.setAttribute('download', `Receipt_${viewReceipt.receiptNo || viewReceipt._id}.pdf`);
+                      document.body.appendChild(link);
+                      link.click();
+                      toast.success('Receipt PDF Downloaded');
+                    } catch (err) {
+                      toast.error('PDF Download Failed');
+                    }
+                  }}
                   className="flex-1 py-2.5 px-4 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all"
                 >
                   <Download size={15} /> Download PDF
-                </a>
+                </button>
                 {viewReceipt.customerEmail && (
                   <button
                     onClick={() => { resendMutation.mutate(viewReceipt._id); setViewReceipt(null); }}
@@ -302,14 +377,14 @@ const Receipts = () => {
         </div>
       )}
 
-      {/* ── Create Receipt Modal ── */}
+      {/* ── Create/Edit Receipt Modal ── */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={handleModalClose} />
           <div className="bg-white rounded-3xl w-full max-w-2xl relative z-10 overflow-hidden shadow-2xl animate-fade-in max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between shrink-0">
-              <h3 className="text-lg font-display font-bold text-slate-800">New Payment Receipt</h3>
-              <button onClick={() => setIsModalOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
+              <h3 className="text-lg font-display font-bold text-slate-800">{editReceipt ? 'Update Receipt' : 'New Payment Receipt'}</h3>
+              <button onClick={handleModalClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
                 <X size={18} />
               </button>
             </div>
@@ -388,11 +463,11 @@ const Receipts = () => {
               </div>
 
               <div className="flex justify-end gap-3 pt-4">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors">
+                <button type="button" onClick={handleModalClose} className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors">
                   Cancel
                 </button>
-                <button disabled={mutation.isPending} type="submit" className="premium-btn">
-                  {mutation.isPending ? 'Generating...' : 'Generate Receipt & Email'}
+                <button disabled={mutation.isPending || updateMutation.isPending} type="submit" className="premium-btn">
+                  {mutation.isPending || updateMutation.isPending ? 'Processing...' : (editReceipt ? 'Update Receipt' : 'Generate Receipt & Email')}
                 </button>
               </div>
             </form>

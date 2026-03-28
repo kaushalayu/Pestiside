@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
-import { Wallet, Plus, TrendingDown, IndianRupee, Users, CheckCircle2, XCircle, Clock, Trash2, X, Filter, Calendar, Receipt, ChevronRight } from 'lucide-react';
+import { Wallet, Plus, TrendingDown, IndianRupee, Users, CheckCircle2, XCircle, Clock, Trash2, X, Filter, Calendar, Receipt, ChevronRight, Edit3 } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 
@@ -56,6 +56,7 @@ const Expenses = () => {
   });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editExpense, setEditExpense] = useState(null);
   const [formData, setFormData] = useState({
     category: 'Travel',
     amount: '',
@@ -71,11 +72,44 @@ const Expenses = () => {
       queryClient.invalidateQueries(['expenses']);
       queryClient.invalidateQueries(['expenseStats']);
       setIsModalOpen(false);
+      setEditExpense(null);
       toast.success('Disbursement recorded');
       setFormData({ category: 'Travel', amount: '', description: '', date: new Date().toISOString().split('T')[0], receiptNote: '', branchId: '' });
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Access denied'),
   });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => api.patch(`/expenses/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['expenses']);
+      queryClient.invalidateQueries(['expenseStats']);
+      setIsModalOpen(false);
+      setEditExpense(null);
+      toast.success('Disbursement updated');
+      setFormData({ category: 'Travel', amount: '', description: '', date: new Date().toISOString().split('T')[0], receiptNote: '', branchId: '' });
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Update failed'),
+  });
+
+  const handleEdit = (expense) => {
+    setEditExpense(expense);
+    setFormData({
+      category: expense.category,
+      amount: expense.amount,
+      description: expense.description,
+      date: new Date(expense.date).toISOString().split('T')[0],
+      receiptNote: expense.receiptNote || '',
+      branchId: expense.branchId?._id || '',
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+    setEditExpense(null);
+    setFormData({ category: 'Travel', amount: '', description: '', date: new Date().toISOString().split('T')[0], receiptNote: '', branchId: '' });
+  };
 
   const statusMutation = useMutation({
     mutationFn: ({ id, status }) => api.patch(`/expenses/${id}/status`, { status }),
@@ -197,9 +231,16 @@ const Expenses = () => {
                               {expense.status}
                            </span>
                         </td>
-                        <td className="px-6 py-4">
-                           <div className="flex items-center gap-2">
-                              {isAdmin && expense.status === 'PENDING' ? (
+                         <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                               <button 
+                                  onClick={() => handleEdit(expense)}
+                                  className="p-2 bg-slate-50 text-slate-400 hover:bg-brand-50 hover:text-brand-600 rounded-lg transition-all"
+                                  title="Edit Entry"
+                               >
+                                  <Edit3 size={14} />
+                               </button>
+                               {isAdmin && expense.status === 'PENDING' ? (
                                  <>
                                     <button 
                                        onClick={() => statusMutation.mutate({ id: expense._id, status: 'APPROVED' })}
@@ -240,17 +281,24 @@ const Expenses = () => {
       {/* Disbursement Modal */}
       {isModalOpen && (
          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={handleModalClose}></div>
             <div className="bg-white rounded-[2rem] w-full max-w-lg border-2 border-slate-900 p-8 md:p-10 relative z-10 animate-in zoom-in-95 duration-200">
                <div className="flex justify-between items-start mb-8">
                   <div>
-                     <h2 className="text-xl font-black text-slate-900 uppercase tracking-widest">Logging Auth</h2>
+                     <h2 className="text-xl font-black text-slate-900 uppercase tracking-widest">{editExpense ? 'Update Entry' : 'Logging Auth'}</h2>
                      <p className="text-[9px] font-bold text-slate-500 uppercase mt-1">Personnel Disbursement Registry</p>
                   </div>
-                  <button onClick={() => setIsModalOpen(false)} className="p-2 bg-slate-100 hover:bg-red-50 hover:text-red-500 rounded-xl transition-all"><X size={20} /></button>
+                  <button onClick={handleModalClose} className="p-2 bg-slate-100 hover:bg-red-50 hover:text-red-500 rounded-xl transition-all"><X size={20} /></button>
                </div>
 
-               <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate(formData); }} className="space-y-6">
+               <form onSubmit={(e) => { 
+                  e.preventDefault(); 
+                  if (editExpense) {
+                    updateMutation.mutate({ id: editExpense._id, data: formData });
+                  } else {
+                    createMutation.mutate(formData);
+                  }
+               }} className="space-y-6">
                   <div className="grid grid-cols-2 gap-4">
                      <div className="space-y-1.5">
                         <label className="text-[9px] font-black text-slate-800 uppercase tracking-widest">Category</label>
@@ -298,11 +346,11 @@ const Expenses = () => {
                   </div>
 
                   <button 
-                     disabled={createMutation.isLoading} 
+                     disabled={createMutation.isLoading || updateMutation.isLoading} 
                      type="submit" 
                      className="w-full py-4 bg-slate-900 text-white font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-black active:scale-95 transition-all border-b-6 border-brand-500"
                   >
-                     {createMutation.isLoading ? 'SYNCHRONIZING...' : 'COMMIT DISBURSEMENT'}
+                     {createMutation.isLoading || updateMutation.isLoading ? 'SYNCHRONIZING...' : (editExpense ? 'UPDATE ENTRY' : 'COMMIT DISBURSEMENT')}
                   </button>
                </form>
             </div>

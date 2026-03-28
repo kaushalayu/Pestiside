@@ -126,7 +126,7 @@ const Login = () => {
                <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between ml-1">
                      <label className="text-sm font-semibold text-slate-700">Password</label>
-                     <a href="#" className="text-sm font-semibold text-green-600 hover:text-green-500 transition-colors">Forgot password?</a>
+                      <a href="/forgot-password" className="text-sm font-semibold text-green-600 hover:text-green-500 transition-colors">Forgot password?</a>
                   </div>
                   <div className="relative flex items-center">
                     <div className="absolute left-0 pl-4 flex items-center pointer-events-none">

@@ -1,21 +1,46 @@
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  FileText, Download, ArrowLeft, Calendar, User, Phone, 
-  MapPin, ShieldCheck, Layers, PenTool, IndianRupee, Printer, Mail,
-  CheckCircle2, Clock
+  FileText, Download, ArrowLeft, User, Phone, 
+  MapPin, ShieldCheck, PenTool, IndianRupee,
+  CheckCircle2, Clock, XCircle, Calendar, ChevronRight
 } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 
+const STATUS_OPTIONS = ['DRAFT', 'SUBMITTED', 'SCHEDULED', 'COMPLETED', 'CANCELLED'];
+
+const STATUS_CONFIG = {
+  DRAFT: { color: 'bg-slate-100 text-slate-600 border-slate-200', next: 'SUBMITTED' },
+  SUBMITTED: { color: 'bg-blue-50 text-blue-600 border-blue-100', next: 'SCHEDULED' },
+  SCHEDULED: { color: 'bg-amber-50 text-amber-600 border-amber-100', next: 'COMPLETED' },
+  COMPLETED: { color: 'bg-emerald-50 text-emerald-600 border-emerald-100', next: null },
+  CANCELLED: { color: 'bg-red-50 text-red-600 border-red-100', next: null },
+};
+
 const FormDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const { data: form, isLoading, error } = useQuery({
     queryKey: ['form', id],
     queryFn: async () => (await api.get(`/forms/${id}`)).data.data
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: async ({ status }) => {
+      await api.patch(`/forms/${id}/status`, { status });
+    },
+    onSuccess: (_, { status }) => {
+      queryClient.invalidateQueries(['form', id]);
+      queryClient.invalidateQueries(['forms']);
+      toast.success(`Status updated to ${status}`);
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Status update failed');
+    }
   });
 
   const handleDownloadPdf = async () => {
@@ -48,6 +73,9 @@ const FormDetail = () => {
     </div>
   );
 
+  const currentStatus = form.status;
+  const statusInfo = STATUS_CONFIG[currentStatus] || STATUS_CONFIG.DRAFT;
+
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-5 duration-700 pb-20 font-sans">
       
@@ -60,11 +88,8 @@ const FormDetail = () => {
            <div>
               <div className="flex items-center gap-3">
                  <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">{form.orderNo}</h1>
-                 <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border-2 ${
-                    form.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                    'bg-blue-50 text-blue-600 border-blue-100'
-                 }`}>
-                    {form.status}
+                 <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border-2 ${statusInfo.color}`}>
+                    {currentStatus}
                  </span>
               </div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1 italic">Verified Operational Audit Review</p>
@@ -79,6 +104,51 @@ const FormDetail = () => {
               <Download size={16} /> Print Audit Log
            </button>
         </div>
+      </div>
+
+      {/* Status Update Panel */}
+      <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-6 rounded-2xl border border-slate-700">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h3 className="text-white font-black uppercase text-sm tracking-widest mb-1">Operational Status Control</h3>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Update job card deployment phase</p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {STATUS_OPTIONS.map((status) => {
+              const info = STATUS_CONFIG[status];
+              const isCurrent = status === currentStatus;
+              const isNext = statusInfo.next === status;
+              const isPast = STATUS_OPTIONS.indexOf(status) < STATUS_OPTIONS.indexOf(currentStatus);
+              
+              return (
+                <button
+                  key={status}
+                  disabled={statusMutation.isPending || isCurrent || (!isNext && !isPast)}
+                  onClick={() => statusMutation.mutate({ status })}
+                  className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
+                    isCurrent 
+                      ? `${info.color} border-2 cursor-default` 
+                      : isNext 
+                        ? 'bg-emerald-500 text-white hover:bg-emerald-400 border-b-4 border-emerald-700 active:scale-95' 
+                        : isPast 
+                          ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                          : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                  }`}
+                >
+                  {isCurrent ? (
+                    <CheckCircle2 size={12} />
+                  ) : isNext ? (
+                    <ChevronRight size={12} />
+                  ) : null}
+                  {status}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        {statusMutation.isError && (
+          <p className="text-red-400 text-[10px] mt-3 font-bold">{statusMutation.error?.response?.data?.message || 'Update failed'}</p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-10">

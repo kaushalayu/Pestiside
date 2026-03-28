@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { Toaster } from 'react-hot-toast';
 import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import DashboardLayout from './layouts/DashboardLayout';
 import Dashboard from './pages/Dashboard';
 import Forms from './pages/Forms';
@@ -14,6 +16,7 @@ import Receipts from './pages/Receipts';
 import Collections from './pages/Collections';
 import Inventory from './pages/Inventory';
 import Expenses from './pages/Expenses';
+import Reports from './pages/Reports';
 import FormDetail from './pages/FormDetail';
 
 const ProtectedRoute = ({ children }) => {
@@ -29,6 +32,8 @@ const App = () => {
       <Routes>
         {/* Public */}
         <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
 
         {/* Protected Dashboard/App shell */}
         <Route path="/" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
@@ -44,6 +49,7 @@ const App = () => {
           <Route path="forms" element={<Forms />} />
           <Route path="forms/create" element={<CreateForm />} />
           <Route path="forms/:id" element={<FormDetail />} />
+          <Route path="reports" element={<Reports />} />
         </Route>
       </Routes>
     </BrowserRouter>

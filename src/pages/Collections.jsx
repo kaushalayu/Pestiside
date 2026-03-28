@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
-import { IndianRupee, TrendingUp, Users as UsersIcon, Calendar, Filter, Database, Wallet, CreditCard, ChevronRight } from 'lucide-react';
+import { IndianRupee, TrendingUp, Users as UsersIcon, Calendar, Filter, Database, Wallet, CreditCard, ChevronRight, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const Collections = () => {
@@ -10,7 +10,7 @@ const Collections = () => {
   const fetchCollections = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/collections/stats'); // Added trailing slash for Express 5 compatibility
+      const res = await api.get('/collections/stats');
       if (res.data?.success) {
         setData(res.data.data);
       }
@@ -42,14 +42,16 @@ const Collections = () => {
         <div>
           <h1 className="text-xl md:text-2xl font-display font-black text-slate-900 tracking-tight uppercase">Revenue Ledger</h1>
           <p className="text-slate-500 mt-1 font-bold uppercase text-[8px] tracking-wider italic flex items-center gap-2">
-             <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+             <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
              Aggregated Collection Index
           </p>
         </div>
         <button 
            onClick={fetchCollections}
-           className="px-6 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl transition-all font-black text-[10px] uppercase tracking-widest active:scale-95 border-b-4 border-slate-700 hover:border-slate-800"
+           disabled={loading}
+           className="px-6 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl transition-all font-black text-[10px] uppercase tracking-widest active:scale-95 border-b-4 border-slate-700 hover:border-slate-800 disabled:opacity-50 flex items-center gap-2"
         >
+           {loading ? <RefreshCw size={14} className="animate-spin" /> : null}
            Sync Registry
         </button>
       </div>
