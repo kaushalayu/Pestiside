@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Mail, Plus, Search as SearchIcon, CheckCircle2, Phone, Target, ArrowRight, DownloadCloud, User, MapPin, Tag, Activity, Clock, ShieldCheck, Database, X, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Mail, Plus, Search as SearchIcon, CheckCircle2, Phone, Target, ArrowRight, DownloadCloud, User, MapPin, Tag, Activity, Clock, ShieldCheck, Database, X, Trash2, ChevronLeft, ChevronRight, Bell, Calendar, Eye } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 
 const STATUS_CONFIG = {
-  NEW: { color: 'bg-emerald-50 text-emerald-800 border-emerald-200', label: 'Fresh Inquiry' },
-  CONTACTED: { color: 'bg-blue-50 text-blue-800 border-blue-200', label: 'In Progress' },
-  DEMO_SCHEDULED: { color: 'bg-amber-50 text-amber-800 border-amber-200', label: 'Demo Scheduled' },
-  QUALIFIED: { color: 'bg-purple-50 text-purple-800 border-purple-200', label: 'Qualified' },
-  CONVERTED: { color: 'bg-slate-900 text-white border-slate-900', label: 'Closed Win' },
-  LOST: { color: 'bg-red-50 text-red-500 border-red-100', label: 'Declined' }
+  NEW: { color: 'bg-emerald-50 text-emerald-800 border-emerald-200', label: 'Fresh Inquiry', next: 'CONTACTED' },
+  CONTACTED: { color: 'bg-blue-50 text-blue-800 border-blue-200', label: 'In Progress', next: 'VISIT_DONE' },
+  VISIT_DONE: { color: 'bg-cyan-50 text-cyan-800 border-cyan-200', label: 'Visit Done', next: 'DEMO_SCHEDULED' },
+  DEMO_SCHEDULED: { color: 'bg-amber-50 text-amber-800 border-amber-200', label: 'Demo Scheduled', next: 'QUALIFIED' },
+  QUALIFIED: { color: 'bg-purple-50 text-purple-800 border-purple-200', label: 'Qualified', next: 'CONVERTED' },
+  CONVERTED: { color: 'bg-slate-900 text-white border-slate-900', label: 'Closed Win', next: null },
+  LOST: { color: 'bg-red-50 text-red-500 border-red-100', label: 'Declined', next: null }
 };
 
 const Enquiries = () => {
@@ -45,6 +46,9 @@ const Enquiries = () => {
   });
   
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isFollowUpModalOpen, setIsFollowUpModalOpen] = useState(false);
+  const [selectedEnquiry, setSelectedEnquiry] = useState(null);
+  const [followUpData, setFollowUpData] = useState({ nextFollowUp: '', notes: '' });
 
   const [formData, setFormData] = useState({
     customerName: '', mobile: '', city: '', requirement: '',
@@ -66,6 +70,18 @@ const Enquiries = () => {
     onError: (err) => {
       toast.error(err.response?.data?.message || 'Access Denied');
     }
+  });
+
+  const followUpMutation = useMutation({
+    mutationFn: ({ id, data }) => api.post(`/enquiries/${id}/followup`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['enquiries']);
+      setIsFollowUpModalOpen(false);
+      setSelectedEnquiry(null);
+      setFollowUpData({ nextFollowUp: '', notes: '' });
+      toast.success('Follow-up added');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to add follow-up')
   });
 
   const statusMutation = useMutation({
@@ -130,6 +146,25 @@ const Enquiries = () => {
            className="px-8 py-3 bg-brand-600 hover:bg-brand-500 text-white rounded-xl transition-all font-black text-[10px] uppercase tracking-widest active:scale-95 border-b-6 border-slate-900 shadow-none"
         >
            <Plus size={16} className="inline mr-2" /> Register Lead
+        </button>
+        <button 
+           onClick={async () => {
+             try {
+               const response = await api.get('/enquiries/export/sheets', { responseType: 'blob' });
+               const url = window.URL.createObjectURL(new Blob([response.data]));
+               const link = document.createElement('a');
+               link.href = url;
+               link.setAttribute('download', `Enquiries_${Date.now()}.csv`);
+               document.body.appendChild(link);
+               link.click();
+               toast.success('Enquiries Exported');
+             } catch {
+               toast.error('Export Failed');
+             }
+           }}
+           className="px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all font-black text-[10px] uppercase tracking-widest active:scale-95"
+        >
+           <DownloadCloud size={16} className="inline mr-2" /> Export CSV
         </button>
       </div>
 
@@ -197,15 +232,23 @@ const Enquiries = () => {
                </div>
 
                <div className="pt-6 border-t border-slate-100 group-hover:border-slate-900 transition-colors">
-                   <p className="text-[7px] font-black text-slate-300 uppercase tracking-[.3em] mb-4">Pipeline Auth Migrate</p>
-                   <div className="flex flex-wrap gap-2">
-                      {Object.keys(STATUS_CONFIG).filter(s => s !== enquiry.status).map(status => (
-                         <button 
-                            key={status}
-                            onClick={() => statusMutation.mutate({ id: enquiry._id, status })}
-                            className="px-3 py-1.5 bg-slate-50 hover:bg-slate-900 hover:text-white border border-slate-200 hover:border-slate-900 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all active:scale-95"
-                         >
-                            {status.replace(/_/g, ' ')}
+                    <div className="flex items-center justify-between mb-4">
+                       <p className="text-[7px] font-black text-slate-300 uppercase tracking-[.3em]">Pipeline</p>
+                       <button 
+                          onClick={() => { setSelectedEnquiry(enquiry); setFollowUpData({ nextFollowUp: '', notes: '' }); setIsFollowUpModalOpen(true); }}
+                          className="flex items-center gap-1 px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg text-[8px] font-bold uppercase text-amber-700 transition-all"
+                       >
+                          <Bell size={10} /> Follow-up
+                       </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                       {Object.keys(STATUS_CONFIG).filter(s => s !== enquiry.status).map(status => (
+                          <button 
+                             key={status}
+                             onClick={() => statusMutation.mutate({ id: enquiry._id, status })}
+                             className="px-3 py-1.5 bg-slate-50 hover:bg-slate-900 hover:text-white border border-slate-200 hover:border-slate-900 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all active:scale-95"
+                          >
+                             {status.replace(/_/g, ' ')}
                          </button>
                       ))}
                    </div>
@@ -308,6 +351,53 @@ const Enquiries = () => {
                </form>
             </div>
          </div>
+      )}
+
+      {/* Follow-up Modal */}
+      {isFollowUpModalOpen && selectedEnquiry && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="bg-amber-500 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-lg font-black text-white uppercase tracking-wider flex items-center gap-2">
+                <Bell size={18} /> Add Follow-up
+              </h2>
+              <button onClick={() => { setIsFollowUpModalOpen(false); setSelectedEnquiry(null); }} className="text-white/80 hover:text-white text-2xl">×</button>
+            </div>
+            <form onSubmit={(e) => { e.preventDefault(); followUpMutation.mutate({ id: selectedEnquiry._id, data: followUpData }); }} className="p-6 space-y-4">
+              <div className="bg-slate-50 p-4 rounded-xl">
+                <p className="text-xs font-bold text-slate-500 uppercase mb-1">Enquiry</p>
+                <p className="text-sm font-black text-slate-900">{selectedEnquiry.customerName}</p>
+                <p className="text-xs text-slate-500">{selectedEnquiry.mobile} • {selectedEnquiry.city}</p>
+                <p className="text-[10px] text-slate-400 mt-2 italic">"{selectedEnquiry.requirement}"</p>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest block mb-2">Next Follow-up Date</label>
+                <input 
+                  type="date" 
+                  value={followUpData.nextFollowUp} 
+                  onChange={e => setFollowUpData({...followUpData, nextFollowUp: e.target.value})} 
+                  className="w-full bg-slate-50 border-2 border-slate-100 focus:border-amber-500 px-4 py-3 rounded-xl text-sm font-medium outline-none transition-all" 
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest block mb-2">Notes</label>
+                <textarea 
+                  value={followUpData.notes} 
+                  onChange={e => setFollowUpData({...followUpData, notes: e.target.value})} 
+                  className="w-full bg-slate-50 border-2 border-slate-100 focus:border-amber-500 px-4 py-3 rounded-xl text-sm font-medium outline-none transition-all resize-none h-24" 
+                  placeholder="Add notes about this follow-up..."
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => { setIsFollowUpModalOpen(false); setSelectedEnquiry(null); }} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black uppercase text-xs tracking-widest rounded-xl transition-all">Cancel</button>
+                <button type="submit" className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white font-black uppercase text-xs tracking-widest rounded-xl transition-all shadow-lg">Save Follow-up</button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

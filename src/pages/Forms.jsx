@@ -1,5 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSelector } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Plus, Search, FileText, Download, Filter, Eye, 
@@ -12,6 +13,8 @@ const fetchForms = async () => (await api.get('/forms')).data.data;
 
 const Forms = () => {
   const navigate = useNavigate();
+  const { user } = useSelector(state => state.auth);
+  const isAdmin = user?.role === 'super_admin' || user?.role === 'branch_admin' || user?.role === 'office';
   const { data: forms, isLoading } = useQuery({ queryKey: ['forms'], queryFn: fetchForms });
 
   const getStatusColor = (status) => {
@@ -30,12 +33,28 @@ const Forms = () => {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `JobCard_${orderNo}.pdf`);
+      link.setAttribute('download', `JobCard_${orderNo || formId}.pdf`);
       document.body.appendChild(link);
       link.click();
-      toast.success('Audit Copy Generated');
+      toast.success('PDF Generated');
     } catch (err) {
-      toast.error('PDF Generation Fault');
+      console.error('PDF Error:', err);
+      toast.error('PDF Generation Failed');
+    }
+  };
+
+  const handleExportCSV = async () => {
+    try {
+      const response = await api.get('/forms/export', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `ServiceForms_${Date.now()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      toast.success('Excel/CSV Exported');
+    } catch (err) {
+      toast.error('Export Failed');
     }
   };
 
@@ -53,6 +72,11 @@ const Forms = () => {
         </div>
         
         <div className="flex items-center gap-3 w-full md:w-auto">
+          {isAdmin && (
+            <button onClick={handleExportCSV} className="px-4 py-3 bg-emerald-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all hover:bg-emerald-500 active:scale-95 flex items-center justify-center gap-2 border-b-4 border-slate-900 shadow-none">
+              <Download size={14} /> Export CSV
+            </button>
+          )}
           <Link to="/forms/create" className="flex-1 md:flex-none px-6 py-3 bg-brand-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all hover:bg-brand-500 active:scale-95 flex items-center justify-center gap-2 border-b-4 border-slate-900 shadow-none">
             <Plus size={16} /> New Booking
           </Link>

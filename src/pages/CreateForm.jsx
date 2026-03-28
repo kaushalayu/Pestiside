@@ -29,21 +29,28 @@ const Select = ({ className = '', ...props }) => (
   />
 );
 
-const CheckboxGroup = ({ options, selected, onChange }) => (
+const CheckboxGroup = ({ options, selected, onChange, prices = {} }) => (
   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
     {options.map(opt => (
       <button
         key={opt}
         type="button"
         onClick={() => onChange(opt)}
-        className={`flex items-center gap-2 px-3 py-2 rounded-md border text-[10px] font-medium transition-all ${
+        className={`flex items-center justify-between px-3 py-2 rounded-md border text-[10px] font-medium transition-all ${
           selected.includes(opt) 
             ? 'bg-slate-900 border-slate-900 text-white' 
             : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'
         }`}
       >
-        {selected.includes(opt) ? <CheckSquare size={12} /> : <XCircle size={12} />}
-        {opt}
+        <span className="flex items-center gap-2">
+          {selected.includes(opt) ? <CheckSquare size={12} /> : <XCircle size={12} />}
+          {opt}
+        </span>
+        {prices[opt] && (
+          <span className={`text-[9px] font-bold ${selected.includes(opt) ? 'text-emerald-300' : 'text-emerald-600'}`}>
+            ₹{prices[opt]}
+          </span>
+        )}
       </button>
     ))}
   </div>
@@ -57,19 +64,28 @@ const CreateForm = () => {
 
   const [formData, setFormData] = useState({
     branchId: '',
+    customerId: '',
     customer: { title: 'Mr.', name: '', address: '', city: '', gstNo: '', phone: '', whatsapp: '', email: '' },
     serviceCategory: 'Residential',
+    reference: 'Walk-in',
     attDetails: { constructionPhase: '', treatmentType: '', chemical: '', method: 'Drill', base: 'Water' },
     amcServices: [],
     premises: { type: '', floors: '', otherArea: '', measurement: '', rooms: '' },
     schedule: { type: 'Single', date: '', time: '' },
-    billing: { paymentMode: 'Cash', advance: '', due: '', total: '', discount: '', paymentDetail: '' },
-    contract: { contractNo: '', period: '', warranty: '' },
+    billing: { paymentMode: 'Cash', advance: '', due: '', total: '', discount: '', paymentDetail: '', transactionNo: '', paymentImage: '' },
+    contract: { contractNo: '', period: '', warranty: '', startDate: '', endDate: '' },
     signatures: { employeeSignature: null, customerSignature: null },
     logistics: { vehicleNo: '', startMeter: '', endMeter: '', startMeterPhoto: '', endMeterPhoto: '' }
   });
 
-  const [uploadState, setUploadState] = useState({ start: false, end: false });
+  const [serviceRates, setServiceRates] = useState({});
+  const [, setPaymentProofFile] = useState(null);
+  const [, setIsUploadingProof] = useState(false);
+  const [, setUploadState] = useState({ start: false, end: false });
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const startFileRef = useRef(null);
   const endFileRef = useRef(null);
 
@@ -89,12 +105,62 @@ const CreateForm = () => {
     enabled: user?.role === 'super_admin' || user?.role === 'branch_admin'
   });
 
+  const { data: customersData } = useQuery({
+    queryKey: ['customers', customerSearch],
+    queryFn: async () => {
+      if (customerSearch.length < 2) return [];
+      const res = await api.get(`/customers?search=${customerSearch}&limit=20`);
+      return res.data.data;
+    },
+    enabled: customerSearch.length >= 2
+  });
+
+  const handleSelectCustomer = (customer) => {
+    setFormData(prev => ({
+      ...prev,
+      customerId: customer._id,
+      customer: {
+        ...prev.customer,
+        name: customer.name,
+        phone: customer.phone,
+        email: customer.email || '',
+        address: customer.address || '',
+        city: customer.city || '',
+        gstNo: customer.gstNo || ''
+      }
+    }));
+    setSelectedCustomerId(customer._id);
+    setCustomerSearch(customer.name);
+    setShowCustomerDropdown(false);
+  };
+
+  const { data: rateData } = useQuery({
+    queryKey: ['serviceRates', formData.serviceCategory, formData.branchId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.append('category', formData.serviceCategory);
+      if (formData.branchId) params.append('branchId', formData.branchId);
+      const res = await api.get(`/service-rates?${params.toString()}`);
+      return res.data.data;
+    },
+    enabled: !!formData.serviceCategory
+  });
+
+  useEffect(() => {
+    if (rateData && rateData.length > 0) {
+      const ratesMap = {};
+      rateData.forEach(r => { ratesMap[r.serviceName] = r.price; });
+      setServiceRates(ratesMap);
+    }
+  }, [rateData]);
+
   const sigPadRefEmp = useRef(null);
   const sigPadRefCust = useRef(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const pestOptions = ['Cockroaches', 'Ants', 'Spider', 'Mosquito', 'Flies', 'Lizard', 'Rodent', 'Vector', 'Bed Bugs', 'Wood Borer', 'Fumigation', 'Others'];
   const serviceOptions = ['Residential', 'Commercial', 'Industrial'];
+  const referenceOptions = ['Company', 'Social Media', 'Website', 'Walk-in', 'Referral', 'Google', 'Facebook', 'Justdial', 'Other'];
   const scheduleOptions = ['Single', 'One Time', 'Monthly', 'Yearly'];
   const pMethodOptions = ['Drill', 'Fill', 'Seal'];
   const paymentModes = ['Cash', 'Cheque', 'NEFT', 'Online', 'Wallet', 'Pending'];
@@ -102,23 +168,67 @@ const CreateForm = () => {
   const constructionPhases = ['New Construction', 'Renovation', 'Existing Building', 'Vacant', 'Occupied'];
   const treatmentTypes = ['Pre-Construction', 'Post-Construction', 'General Pest Control', 'Termite Control', 'Fumigation'];
   const warrantyOptions = ['1 Month', '3 Months', '6 Months', '1 Year', '2 Years', 'No Warranty'];
-  const periods = ['1 Month', '3 Months', '6 Months', '1 Year', '2 Years', '3 Years'];
+
+
+  const calculateBilling = (currentForm) => {
+    let serviceTotal = 0;
+    currentForm.amcServices.forEach(service => {
+      serviceTotal += serviceRates[service] || 0;
+    });
+    
+    const area = parseFloat(currentForm.premises.measurement) || 0;
+    const areaRatePerSqft = 2;
+    const areaTotal = area * areaRatePerSqft;
+    
+    const subTotal = serviceTotal + areaTotal;
+    const discount = parseFloat(currentForm.billing.discount) || 0;
+    const advance = parseFloat(currentForm.billing.advance) || 0;
+    const grandTotal = subTotal - discount;
+    const due = Math.max(0, grandTotal - advance);
+    
+    return {
+      serviceTotal,
+      areaTotal,
+      total: grandTotal,
+      due
+    };
+  };
 
   const handleNestedChange = (section, field, value) => {
-    setFormData(prev => ({
-      ...prev, [section]: { ...prev[section], [field]: value }
-    }));
+    setFormData(prev => {
+      const updated = { ...prev, [section]: { ...prev[section], [field]: value } };
+      
+      if (section === 'billing' && (field === 'discount' || field === 'advance')) {
+        const billing = calculateBilling(updated);
+        updated.billing.total = billing.total;
+        updated.billing.due = billing.due;
+      }
+      
+      if (section === 'premises' && field === 'measurement') {
+        const billing = calculateBilling(updated);
+        updated.billing.total = billing.total;
+        updated.billing.due = billing.due;
+      }
+      
+      return updated;
+    });
   };
 
   const handlePestToggle = (pest) => {
     setFormData(prev => {
       const exists = prev.amcServices.includes(pest);
-      return {
+      const updated = {
         ...prev,
         amcServices: exists 
           ? prev.amcServices.filter(p => p !== pest) 
           : [...prev.amcServices, pest]
       };
+      
+      const billing = calculateBilling(updated);
+      updated.billing.total = billing.total;
+      updated.billing.due = billing.due;
+      
+      return updated;
     });
   };
 
@@ -136,10 +246,29 @@ const CreateForm = () => {
       });
       handleNestedChange('logistics', `${type}MeterPhoto`, res.data.data);
       toast.success(`${type.toUpperCase()} proof appended`);
-    } catch (err) {
+    } catch {
       toast.error('Evidence logic fault');
+    }
+  };
+
+  const handlePaymentProofUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsUploadingProof(true);
+    try {
+      const data = new FormData();
+      data.append('file', file);
+      const res = await api.post('/upload', data, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      handleNestedChange('billing', 'paymentImage', res.data.data);
+      setPaymentProofFile(file);
+      toast.success('Payment proof uploaded');
+    } catch {
+      toast.error('Upload failed');
     } finally {
-      setUploadState(prev => ({ ...prev, [type]: false }));
+      setIsUploadingProof(false);
     }
   };
 
@@ -164,12 +293,26 @@ const CreateForm = () => {
        return;
     }
 
+    if (!formData.customer.name || !formData.customer.phone) {
+      toast.error('Customer details are required');
+      return;
+    }
+
+    if (formData.amcServices.length === 0) {
+      toast.error('Please select at least one service');
+      return;
+    }
+
+    setShowConfirmModal(true);
+  };
+
+  const confirmAndSubmit = () => {
     setIsLoading(true);
     const empSig = sigPadRefEmp.current?.getTrimmedCanvas()?.toDataURL('image/png');
     const custSig = sigPadRefCust.current?.getTrimmedCanvas()?.toDataURL('image/png');
 
     if (!empSig || !custSig) {
-      toast.error('Consingee & Tech Signatures Required');
+      toast.error('Consignee & Tech Signatures Required');
       setIsLoading(false);
       return;
     }
@@ -224,6 +367,43 @@ const CreateForm = () => {
                   <User size={14} className="text-slate-400" />
                   <Label className="mb-0">Customer Details</Label>
                 </div>
+                
+                <div className="relative">
+                  <Label>Select Existing Customer</Label>
+                  <Input 
+                    value={customerSearch}
+                    onChange={(e) => {
+                      setCustomerSearch(e.target.value);
+                      setShowCustomerDropdown(true);
+                      if (!e.target.value) {
+                        setSelectedCustomerId('');
+                        setFormData(prev => ({ ...prev, customerId: '' }));
+                      }
+                    }}
+                    onFocus={() => setShowCustomerDropdown(true)}
+                    placeholder="Search by name or phone..."
+                  />
+                  {showCustomerDropdown && customersData?.length > 0 && (
+                    <div className="absolute z-10 w-full bg-white border border-slate-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                      {customersData.map(cust => (
+                        <button
+                          key={cust._id}
+                          type="button"
+                          onClick={() => handleSelectCustomer(cust)}
+                          className="w-full text-left px-3 py-2 hover:bg-slate-50 border-b border-slate-100 text-xs"
+                        >
+                          <span className="font-medium">{cust.name}</span>
+                          <span className="text-slate-400 ml-2">{cust.phone}</span>
+                          <span className="text-slate-400 ml-2 text-[10px]">{cust.city}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {selectedCustomerId && (
+                    <p className="text-[9px] text-emerald-600 mt-1">✓ Customer selected</p>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <Select value={formData.customer.title} onChange={e => handleNestedChange('customer', 'title', e.target.value)}>
                      <option>Mr.</option><option>Mrs.</option><option>Ms.</option><option>M/S</option>
@@ -270,6 +450,12 @@ const CreateForm = () => {
                     </button>
                   ))}
                 </div>
+                <div>
+                  <Label>How did you hear about us?</Label>
+                  <Select value={formData.reference} onChange={e => setFormData({...formData, reference: e.target.value})}>
+                    {referenceOptions.map(ref => <option key={ref} value={ref}>{ref}</option>)}
+                  </Select>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <Select value={formData.attDetails.constructionPhase} onChange={e => handleNestedChange('attDetails', 'constructionPhase', e.target.value)}>
                      <option value="">Construction Phase</option>
@@ -300,7 +486,7 @@ const CreateForm = () => {
             <Label className="mb-0 text-white">Pest Control Services</Label>
           </div>
           <div className="p-4">
-            <CheckboxGroup options={pestOptions} selected={formData.amcServices} onChange={handlePestToggle} />
+            <CheckboxGroup options={pestOptions} selected={formData.amcServices} onChange={handlePestToggle} prices={serviceRates} />
           </div>
         </div>
 
@@ -428,8 +614,31 @@ const CreateForm = () => {
               <Label className="mb-0 text-white">Billing</Label>
             </div>
             <div className="p-4 space-y-3">
+              {(formData.amcServices.length > 0 || formData.premises.measurement) && (
+                <div className="bg-emerald-50 border border-emerald-100 rounded-md p-2 mb-2">
+                  <p className="text-[9px] font-bold text-emerald-700 uppercase mb-1">Price Breakdown</p>
+                  <div className="space-y-0.5">
+                    {formData.amcServices.map(s => (
+                      <div key={s} className="flex justify-between text-[10px]">
+                        <span className="text-slate-600">{s}</span>
+                        <span className="font-medium text-slate-900">₹{(serviceRates[s] || 0).toLocaleString('en-IN')}</span>
+                      </div>
+                    ))}
+                    {formData.premises.measurement > 0 && (
+                      <div className="flex justify-between text-[10px] pt-1 border-t border-emerald-200 mt-1">
+                        <span className="text-slate-600">Area Charge ({formData.premises.measurement} sqft × ₹2)</span>
+                        <span className="font-medium text-slate-900">₹{(formData.premises.measurement * 2).toLocaleString('en-IN')}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-[10px] font-bold pt-1 border-t border-emerald-200 mt-1">
+                      <span className="text-slate-700">Sub Total</span>
+                      <span className="text-slate-900">₹{((formData.amcServices.reduce((sum, s) => sum + (serviceRates[s] || 0), 0)) + (formData.premises.measurement * 2)).toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div>
-                <Label>Total Amount</Label>
+                <Label>Total Amount (After Discount)</Label>
                 <Input type="number" value={formData.billing.total} onChange={e => handleNestedChange('billing', 'total', e.target.value)} placeholder="0.00" required />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -463,6 +672,30 @@ const CreateForm = () => {
                    ))}
                 </div>
               </div>
+              {formData.billing.paymentMode !== 'Cash' && formData.billing.paymentMode !== 'Pending' && (
+                <>
+                  <div>
+                    <Label>Transaction / Reference No.</Label>
+                    <Input 
+                      value={formData.billing.transactionNo || ''} 
+                      onChange={e => handleNestedChange('billing', 'transactionNo', e.target.value)} 
+                      placeholder="Enter transaction number" 
+                    />
+                  </div>
+                  <div>
+                    <Label>Payment Proof (Screenshot/Image)</Label>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handlePaymentProofUpload}
+                      className="w-full text-xs file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
+                    />
+                    {formData.billing.paymentImage && (
+                      <p className="text-[9px] text-emerald-600 mt-1">✓ Payment proof uploaded</p>
+                    )}
+                  </div>
+                </>
+              )}
               <Input value={formData.billing.paymentDetail} onChange={e => handleNestedChange('billing', 'paymentDetail', e.target.value)} placeholder="Payment Details (Optional)" />
             </div>
           </div>
@@ -474,17 +707,18 @@ const CreateForm = () => {
             <Label className="mb-0 text-white">Contract Details</Label>
           </div>
           <div className="p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <Label>Contract No</Label>
                 <Input value={formData.contract.contractNo} onChange={e => handleNestedChange('contract', 'contractNo', e.target.value)} placeholder="Contract No (Optional)" />
               </div>
               <div>
-                <Label>Contract Period</Label>
-                <Select value={formData.contract.period} onChange={e => handleNestedChange('contract', 'period', e.target.value)}>
-                   <option value="">Select Period</option>
-                   {periods.map(p => <option key={p} value={p}>{p}</option>)}
-                </Select>
+                <Label>Start Date</Label>
+                <Input type="date" value={formData.contract.startDate} onChange={e => handleNestedChange('contract', 'startDate', e.target.value)} />
+              </div>
+              <div>
+                <Label>End Date</Label>
+                <Input type="date" value={formData.contract.endDate} onChange={e => handleNestedChange('contract', 'endDate', e.target.value)} />
               </div>
               <div>
                 <Label>Warranty</Label>
@@ -494,6 +728,11 @@ const CreateForm = () => {
                 </Select>
               </div>
             </div>
+            {formData.contract.startDate && formData.contract.endDate && (
+              <div className="mt-3 text-[10px] text-slate-500">
+                Contract Duration: {Math.ceil((new Date(formData.contract.endDate) - new Date(formData.contract.startDate)) / (1000 * 60 * 60 * 24))} days
+              </div>
+            )}
           </div>
         </div>
 
@@ -532,6 +771,91 @@ const CreateForm = () => {
           </button>
         </div>
       </form>
+
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-slate-900 px-6 py-4 rounded-t-xl">
+              <h3 className="text-white font-bold uppercase text-sm">Confirm Service Booking</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                <div>
+                  <p className="text-slate-500 font-medium uppercase">Customer</p>
+                  <p className="font-bold">{formData.customer.title} {formData.customer.name}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 font-medium uppercase">Phone</p>
+                  <p className="font-bold">{formData.customer.phone}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 font-medium uppercase">Service Type</p>
+                  <p className="font-bold">{formData.serviceCategory}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 font-medium uppercase">Reference</p>
+                  <p className="font-bold">{formData.reference}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 font-medium uppercase">Schedule</p>
+                  <p className="font-bold">{formData.schedule.type} - {formData.schedule.date}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-slate-500 font-medium uppercase">Services</p>
+                  <p className="font-bold">{formData.amcServices.join(', ')}</p>
+                </div>
+                {formData.premises.measurement && (
+                  <div className="col-span-2">
+                    <p className="text-slate-500 font-medium uppercase">Area</p>
+                    <p className="font-bold">{formData.premises.measurement} Sqft</p>
+                  </div>
+                )}
+                {formData.contract.startDate && (
+                  <div className="col-span-2">
+                    <p className="text-slate-500 font-medium uppercase">Contract Period</p>
+                    <p className="font-bold">{formData.contract.startDate} to {formData.contract.endDate}</p>
+                  </div>
+                )}
+              </div>
+              
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-slate-600">Sub Total</span>
+                  <span className="font-bold">₹{((formData.amcServices.reduce((sum, s) => sum + (serviceRates[s] || 0), 0)) + (formData.premises.measurement * 2)).toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-slate-600">Discount</span>
+                  <span className="font-bold">-₹{(formData.billing.discount || 0).toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-slate-600">Advance Paid</span>
+                  <span className="font-bold">₹{(formData.billing.advance || 0).toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between text-sm font-bold border-t border-emerald-200 pt-2 mt-2">
+                  <span>Balance Due</span>
+                  <span className="text-amber-600">₹{(formData.billing.due || 0).toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button 
+                  onClick={() => setShowConfirmModal(false)}
+                  className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-lg font-bold uppercase text-xs hover:bg-slate-200"
+                >
+                  Edit Details
+                </button>
+                <button 
+                  onClick={confirmAndSubmit}
+                  disabled={mutation.isPending}
+                  className="flex-1 py-3 bg-emerald-600 text-white rounded-lg font-bold uppercase text-xs hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {mutation.isPending ? 'Processing...' : 'Confirm & Submit'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

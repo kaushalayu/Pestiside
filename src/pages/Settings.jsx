@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
-import { Settings as SettingsIcon, Building2, Phone, Mail, MapPin, Save, User, Shield } from 'lucide-react';
+import { Settings as SettingsIcon, Building2, Phone, Mail, MapPin, Save, User, Shield, Plus, Trash2, DollarSign } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 
@@ -35,6 +35,41 @@ const Settings = () => {
   });
 
   const [selectedBranch, setSelectedBranch] = useState(null);
+
+  const [newRate, setNewRate] = useState({ serviceName: 'Cockroaches', category: 'Residential', price: '' });
+
+  const { data: ratesData, isLoading: ratesLoading } = useQuery({
+    queryKey: ['serviceRatesAdmin'],
+    queryFn: async () => {
+      const res = await api.get('/service-rates/admin');
+      return res.data.data;
+    },
+    enabled: isSuperAdmin
+  });
+
+  const createRateMutation = useMutation({
+    mutationFn: (data) => api.post('/service-rates', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['serviceRatesAdmin']);
+      setNewRate({ serviceName: 'Cockroaches', category: 'Residential', price: '' });
+      toast.success('Rate added');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to add rate')
+  });
+
+  const deleteRateMutation = useMutation({
+    mutationFn: (id) => api.delete(`/service-rates/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['serviceRatesAdmin']);
+      toast.success('Rate removed');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to remove rate')
+  });
+
+  const handleAddRate = () => {
+    if (!newRate.price) return toast.error('Please enter price');
+    createRateMutation.mutate({ ...newRate, price: parseFloat(newRate.price) });
+  };
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => api.put(`/branches/${id}`, data),
@@ -179,6 +214,99 @@ const Settings = () => {
           )}
         </div>
       </div>
+
+      {isSuperAdmin && (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="bg-emerald-600 px-6 py-3 flex items-center gap-2">
+            <DollarSign size={16} className="text-white" />
+            <h2 className="text-xs font-black text-white uppercase">Service Rates</h2>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="flex flex-wrap gap-3 items-end">
+              <div>
+                <label className="text-[9px] font-bold text-slate-600 uppercase block mb-1">Service</label>
+                <select 
+                  value={newRate.serviceName}
+                  onChange={(e) => setNewRate({...newRate, serviceName: e.target.value})}
+                  className="border border-slate-200 rounded-lg p-2 text-xs min-w-[140px]"
+                >
+                  {['Cockroaches', 'Ants', 'Spider', 'Mosquito', 'Flies', 'Lizard', 'Rodent', 'Vector', 'Bed Bugs', 'Wood Borer', 'Fumigation', 'Others'].map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-600 uppercase block mb-1">Category</label>
+                <select 
+                  value={newRate.category}
+                  onChange={(e) => setNewRate({...newRate, category: e.target.value})}
+                  className="border border-slate-200 rounded-lg p-2 text-xs min-w-[120px]"
+                >
+                  {['Residential', 'Commercial', 'Industrial'].map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-600 uppercase block mb-1">Price (₹)</label>
+                <input 
+                  type="number"
+                  value={newRate.price}
+                  onChange={(e) => setNewRate({...newRate, price: e.target.value})}
+                  placeholder="0.00"
+                  className="border border-slate-200 rounded-lg p-2 text-xs w-24"
+                />
+              </div>
+              <button 
+                onClick={handleAddRate}
+                disabled={createRateMutation.isPending}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-medium flex items-center gap-1 hover:bg-emerald-700"
+              >
+                <Plus size={14} /> Add Rate
+              </button>
+            </div>
+
+            <div className="border-t border-slate-100 pt-4">
+              <label className="text-[9px] font-bold text-slate-500 uppercase block mb-2">Existing Rates</label>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-slate-50">
+                      <th className="text-left p-2 font-semibold">Service</th>
+                      <th className="text-left p-2 font-semibold">Category</th>
+                      <th className="text-right p-2 font-semibold">Price</th>
+                      <th className="text-center p-2 font-semibold">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ratesLoading ? (
+                      <tr><td colSpan={4} className="p-4 text-center text-slate-400">Loading...</td></tr>
+                    ) : ratesData?.length === 0 ? (
+                      <tr><td colSpan={4} className="p-4 text-center text-slate-400">No rates configured</td></tr>
+                    ) : (
+                      ratesData?.map(rate => (
+                        <tr key={rate._id} className="border-b border-slate-100">
+                          <td className="p-2">{rate.serviceName}</td>
+                          <td className="p-2">{rate.category}</td>
+                          <td className="p-2 text-right font-medium">₹{rate.price}</td>
+                          <td className="p-2 text-center">
+                            <button 
+                              onClick={() => deleteRateMutation.mutate(rate._id)}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
         <div className="bg-slate-900 px-6 py-3 flex items-center gap-2">

@@ -1,10 +1,11 @@
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import { 
   FileText, Download, ArrowLeft, User, Phone, 
   MapPin, ShieldCheck, PenTool, IndianRupee,
-  CheckCircle2, Clock, XCircle, Calendar, ChevronRight
+  CheckCircle2, Clock, Calendar, Truck, Building2, Home
 } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
@@ -12,17 +13,19 @@ import toast from 'react-hot-toast';
 const STATUS_OPTIONS = ['DRAFT', 'SUBMITTED', 'SCHEDULED', 'COMPLETED', 'CANCELLED'];
 
 const STATUS_CONFIG = {
-  DRAFT: { color: 'bg-slate-100 text-slate-600 border-slate-200', next: 'SUBMITTED' },
-  SUBMITTED: { color: 'bg-blue-50 text-blue-600 border-blue-100', next: 'SCHEDULED' },
-  SCHEDULED: { color: 'bg-amber-50 text-amber-600 border-amber-100', next: 'COMPLETED' },
-  COMPLETED: { color: 'bg-emerald-50 text-emerald-600 border-emerald-100', next: null },
-  CANCELLED: { color: 'bg-red-50 text-red-600 border-red-100', next: null },
+  DRAFT: { color: 'bg-slate-100 text-slate-600 border-slate-200', next: 'SUBMITTED', label: 'Draft' },
+  SUBMITTED: { color: 'bg-blue-50 text-blue-600 border-blue-100', next: 'SCHEDULED', label: 'Submitted' },
+  SCHEDULED: { color: 'bg-amber-50 text-amber-600 border-amber-100', next: 'COMPLETED', label: 'Scheduled' },
+  COMPLETED: { color: 'bg-emerald-50 text-emerald-600 border-emerald-100', next: null, label: 'Completed' },
+  CANCELLED: { color: 'bg-red-50 text-red-600 border-red-100', next: null, label: 'Cancelled' },
 };
 
 const FormDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useSelector(state => state.auth);
+  const isFieldStaff = user?.role === 'technician' || user?.role === 'sales';
 
   const { data: form, isLoading, error } = useQuery({
     queryKey: ['form', id],
@@ -49,245 +52,303 @@ const FormDetail = () => {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `JobCard_${form.orderNo}.pdf`);
+      link.setAttribute('download', `JobCard_${form?.orderNo || id}.pdf`);
       document.body.appendChild(link);
       link.click();
-      toast.success('Audit Copy Generated');
+      toast.success('PDF Generated');
     } catch (err) {
-      toast.error('PDF Generation Fault');
+      console.error('PDF Error:', err);
+      toast.error('PDF Generation Failed');
     }
   };
 
   if (isLoading) return (
     <div className="flex flex-col h-[70vh] items-center justify-center gap-4">
        <div className="w-10 h-10 border-4 border-slate-100 border-t-brand-500 rounded-full animate-spin"></div>
-       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Retrieving Digital Asset...</p>
+       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Loading...</p>
     </div>
   );
 
   if (error || !form) return (
     <div className="p-10 text-center space-y-4">
        <FileText size={40} className="mx-auto text-slate-200" />
-       <h2 className="text-xl font-black text-slate-900 uppercase">Operational Asset Missing</h2>
-       <button onClick={() => navigate('/forms')} className="px-6 py-2 bg-slate-900 text-white text-[10px] font-black uppercase rounded-lg">Return to Archive</button>
+       <h2 className="text-xl font-black text-slate-900 uppercase">Form Not Found</h2>
+       <button onClick={() => navigate('/forms')} className="px-6 py-2 bg-slate-900 text-white text-[10px] font-black uppercase rounded-lg">Back to Forms</button>
     </div>
   );
 
-  const currentStatus = form.status;
+  const currentStatus = form?.status;
   const statusInfo = STATUS_CONFIG[currentStatus] || STATUS_CONFIG.DRAFT;
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-5 duration-700 pb-20 font-sans">
+    <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-500 pb-20 font-sans">
       
-      {/* Audit Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div className="flex items-center gap-6">
-           <button onClick={() => navigate('/forms')} className="p-3 bg-white border-2 border-slate-100 text-slate-400 hover:text-slate-900 hover:border-slate-900 rounded-xl transition-all">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex items-center gap-4">
+           <button onClick={() => navigate('/forms')} className="p-3 bg-white border-2 border-slate-200 text-slate-400 hover:text-slate-900 hover:border-slate-900 rounded-xl transition-all">
               <ArrowLeft size={20} />
            </button>
            <div>
               <div className="flex items-center gap-3">
-                 <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">{form.orderNo}</h1>
-                 <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border-2 ${statusInfo.color}`}>
-                    {currentStatus}
+                 <h1 className="text-2xl font-black text-slate-900 uppercase">{form.orderNo || 'DRAFT'}</h1>
+                 <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase border-2 ${statusInfo.color}`}>
+                    {statusInfo.label}
                  </span>
               </div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1 italic">Verified Operational Audit Review</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">
+                 Created: {form.createdAt ? new Date(form.createdAt).toLocaleDateString('en-IN') : 'N/A'}
+              </p>
            </div>
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="flex items-center gap-3">
            <button 
               onClick={handleDownloadPdf}
-              className="flex-1 md:flex-none px-6 py-3 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all hover:bg-black active:scale-95 flex items-center justify-center gap-3 border-b-4 border-slate-700"
+              className="px-6 py-3 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-black transition-all flex items-center gap-2"
            >
-              <Download size={16} /> Print Audit Log
+              <Download size={16} /> Download PDF
            </button>
         </div>
       </div>
 
-      {/* Status Update Panel */}
-      <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-6 rounded-2xl border border-slate-700">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h3 className="text-white font-black uppercase text-sm tracking-widest mb-1">Operational Status Control</h3>
-            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Update job card deployment phase</p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {STATUS_OPTIONS.map((status) => {
-              const info = STATUS_CONFIG[status];
-              const isCurrent = status === currentStatus;
-              const isNext = statusInfo.next === status;
-              const isPast = STATUS_OPTIONS.indexOf(status) < STATUS_OPTIONS.indexOf(currentStatus);
-              
-              return (
-                <button
-                  key={status}
-                  disabled={statusMutation.isPending || isCurrent || (!isNext && !isPast)}
-                  onClick={() => statusMutation.mutate({ status })}
-                  className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
-                    isCurrent 
-                      ? `${info.color} border-2 cursor-default` 
-                      : isNext 
-                        ? 'bg-emerald-500 text-white hover:bg-emerald-400 border-b-4 border-emerald-700 active:scale-95' 
-                        : isPast 
-                          ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
-                          : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                  }`}
-                >
-                  {isCurrent ? (
-                    <CheckCircle2 size={12} />
-                  ) : isNext ? (
-                    <ChevronRight size={12} />
-                  ) : null}
-                  {status}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        {statusMutation.isError && (
-          <p className="text-red-400 text-[10px] mt-3 font-bold">{statusMutation.error?.response?.data?.message || 'Update failed'}</p>
-        )}
+      {/* Status Update */}
+      <div className="bg-slate-800 p-4 rounded-xl flex items-center gap-2 flex-wrap">
+         <span className="text-white text-xs font-bold uppercase mr-2">Update Status:</span>
+         {STATUS_OPTIONS.map(status => {
+           const info = STATUS_CONFIG[status];
+           const isCurrent = status === currentStatus;
+           const isNext = statusInfo.next === status;
+           
+           return (
+             <button
+               key={status}
+               disabled={statusMutation.isPending || isCurrent || (!isNext && status !== currentStatus)}
+               onClick={() => statusMutation.mutate({ status })}
+               className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${
+                 isCurrent 
+                   ? `${info.color} border-2 cursor-default` 
+                   : isNext 
+                     ? 'bg-emerald-500 text-white hover:bg-emerald-400' 
+                     : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+               }`}
+             >
+               {info.label}
+             </button>
+           );
+         })}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
-        
-        {/* Left Col: Core Intelligence */}
-        <div className="md:col-span-12 lg:col-span-8 space-y-10">
-           
-           {/* Subject Profile */}
-           <div className="bg-white p-8 rounded-[2rem] border-2 border-slate-100 relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-8 opacity-5"><User size={80} /></div>
-              <div className="flex items-center gap-3 mb-8">
-                 <div className="p-2 bg-brand-50 text-brand-600 rounded-lg"><User size={16} /></div>
-                 <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Personnel Subject Identification</h3>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                 <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Subject Name</p>
-                    <p className="text-xl font-black text-slate-900 uppercase">{form.customer?.title} {form.customer?.name}</p>
-                 </div>
-                 <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Authenticated Phone</p>
-                    <div className="flex items-center gap-2 text-slate-900 font-bold text-lg">
-                       <Phone size={14} className="text-brand-600" /> {form.customer?.phone}
-                    </div>
-                 </div>
-                 <div className="md:col-span-2">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Operational Address</p>
-                    <div className="flex items-start gap-2 text-slate-700 font-bold italic text-sm">
-                       <MapPin size={16} className="text-slate-300 mt-1 shrink-0" />
-                       <span>{form.customer?.address}, {form.customer?.city}</span>
-                    </div>
-                 </div>
-              </div>
-           </div>
-
-           {/* Operational Analytics */}
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-              <div className="bg-slate-50 p-8 rounded-[2rem] border-2 border-slate-100">
-                 <div className="flex items-center gap-3 mb-6">
-                    <div className="p-2 bg-slate-900 text-white rounded-lg"><PenTool size={16} /></div>
-                    <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Deployment Parameters</h3>
-                 </div>
-                 <div className="space-y-6">
-                    <div className="flex justify-between items-center py-3 border-b border-slate-200">
-                       <span className="text-[9px] font-black text-slate-400 uppercase">Sector</span>
-                       <span className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{form.serviceCategory}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-3 border-b border-slate-200">
-                       <span className="text-[9px] font-black text-slate-400 uppercase">Deployment</span>
-                       <span className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{form.attDetails?.method}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-3 border-b border-slate-200">
-                       <span className="text-[9px] font-black text-slate-400 uppercase">Resource</span>
-                       <span className="text-[11px] font-black text-brand-600 uppercase tracking-tight">{form.attDetails?.chemical}</span>
-                    </div>
-                 </div>
-              </div>
-
-              <div className="bg-white p-8 rounded-[2rem] border-2 border-slate-100">
-                 <div className="flex items-center gap-3 mb-6">
-                    <div className="p-2 bg-brand-50 text-brand-600 rounded-lg"><ShieldCheck size={16} /></div>
-                    <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Vector Control List</h3>
-                 </div>
-                 <div className="flex flex-wrap gap-2">
-                    {form.amcServices?.map(pest => (
-                      <span key={pest} className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-black uppercase tracking-tight border border-slate-200">
-                        {pest}
-                      </span>
-                    )) || <span className="text-[10px] text-slate-400 italic font-bold">General Treatment Program</span>}
-                 </div>
-              </div>
-           </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Customer Details */}
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="bg-brand-600 px-4 py-2 flex items-center gap-2">
+            <User size={14} className="text-white" />
+            <span className="text-white text-xs font-bold uppercase">Customer Details</span>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Name</span>
+              <span className="text-xs font-bold text-slate-900">{form.customer?.title} {form.customer?.name}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Phone</span>
+              <span className="text-xs font-bold text-slate-900">{form.customer?.phone}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">WhatsApp</span>
+              <span className="text-xs font-bold text-slate-900">{form.customer?.whatsapp || '-'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Email</span>
+              <span className="text-xs font-bold text-slate-900">{form.customer?.email || '-'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Address</span>
+              <span className="text-xs font-bold text-slate-900 text-right">{form.customer?.address}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">City</span>
+              <span className="text-xs font-bold text-slate-900">{form.customer?.city}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">GST No</span>
+              <span className="text-xs font-bold text-slate-900">{form.customer?.gstNo || '-'}</span>
+            </div>
+          </div>
         </div>
 
-        {/* Right Col: Financial & Auth */}
-        <div className="md:col-span-12 lg:col-span-4 space-y-10">
-           
-           {/* Financial Audit */}
-           <div className="bg-slate-900 p-10 rounded-[2.5rem] text-white relative overflow-hidden border-2 border-slate-800">
-              <div className="absolute -right-4 -top-4 opacity-5"><IndianRupee size={120} /></div>
-              <div className="flex items-center gap-3 mb-8">
-                 <div className="p-2 bg-white/10 text-white rounded-lg"><IndianRupee size={16} /></div>
-                 <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Ledger Settlement</h3>
-              </div>
-              <div className="space-y-6">
-                 <div>
-                    <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-1 leading-none">Total Value</p>
-                    <p className="text-4xl font-black text-white leading-none">₹{form.billing?.total?.toLocaleString()}</p>
-                 </div>
-                 <div className="pt-6 border-t border-white/10 space-y-4">
-                    <div className="flex justify-between items-center">
-                       <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Advance Recv</span>
-                       <span className="text-xs font-black text-emerald-400">₹{form.billing?.advance || 0}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                       <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Balance Due</span>
-                       <span className="text-xs font-black text-red-400">₹{form.billing?.due || 0}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                       <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Payment Vector</span>
-                       <span className="text-[10px] font-black text-white uppercase tracking-tighter bg-white/5 px-2 py-1 rounded-md">{form.billing?.paymentMode}</span>
-                    </div>
-                 </div>
-              </div>
-           </div>
+        {/* Service Details */}
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="bg-slate-800 px-4 py-2 flex items-center gap-2">
+            <ShieldCheck size={14} className="text-white" />
+            <span className="text-white text-xs font-bold uppercase">Service Details</span>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Service Type</span>
+              <span className="text-xs font-bold text-slate-900">{form.serviceCategory}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Branch</span>
+              <span className="text-xs font-bold text-slate-900">{form.branchId?.branchName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Employee</span>
+              <span className="text-xs font-bold text-slate-900">{form.employeeId?.name || 'Not Assigned'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Pest Services</span>
+              <span className="text-xs font-bold text-slate-900">{form.amcServices?.join(', ') || '-'}</span>
+            </div>
+          </div>
+        </div>
 
-           {/* Validation Proofs */}
-           <div className="bg-white p-8 rounded-[2rem] border-2 border-slate-100 space-y-10">
-              <div>
-                 <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 bg-slate-50 text-slate-400 rounded-lg"><ShieldCheck size={14} /></div>
-                    <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Personnel Proofs</h3>
-                 </div>
-                 <div className="space-y-8">
-                    <div className="space-y-3">
-                       <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest italic leading-none mb-1">Technician Stamp</p>
-                       <div className="h-32 bg-slate-50 rounded-2xl border-2 border-slate-100 flex items-center justify-center p-4">
-                          {form.signatures?.employeeSignature ? (
-                            <img src={form.signatures.employeeSignature} alt="Tech Sig" className="max-h-full max-w-full mix-blend-multiply opacity-80" />
-                          ) : (
-                            <span className="text-[9px] text-slate-300 italic">Signature Not Recorded</span>
-                          )}
-                       </div>
-                    </div>
-                    <div className="space-y-3">
-                       <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest italic leading-none mb-1">Subject Agreement</p>
-                       <div className="h-32 bg-slate-50 rounded-2xl border-2 border-slate-100 flex items-center justify-center p-4">
-                          {form.signatures?.customerSignature ? (
-                            <img src={form.signatures.customerSignature} alt="Cust Sig" className="max-h-full max-w-full mix-blend-multiply opacity-80" />
-                          ) : (
-                            <span className="text-[9px] text-slate-300 italic">Signature Not Recorded</span>
-                          )}
-                       </div>
-                    </div>
-                 </div>
-              </div>
-           </div>
+        {/* Treatment Details */}
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="bg-amber-600 px-4 py-2 flex items-center gap-2">
+            <Building2 size={14} className="text-white" />
+            <span className="text-white text-xs font-bold uppercase">Treatment Details</span>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Construction Phase</span>
+              <span className="text-xs font-bold text-slate-900">{form.attDetails?.constructionPhase || '-'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Treatment Type</span>
+              <span className="text-xs font-bold text-slate-900">{form.attDetails?.treatmentType || '-'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Chemical</span>
+              <span className="text-xs font-bold text-slate-900">{form.attDetails?.chemical || '-'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Method</span>
+              <span className="text-xs font-bold text-slate-900">{form.attDetails?.method || '-'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Base</span>
+              <span className="text-xs font-bold text-slate-900">{form.attDetails?.base || '-'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Premises Details */}
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="bg-purple-600 px-4 py-2 flex items-center gap-2">
+            <Home size={14} className="text-white" />
+            <span className="text-white text-xs font-bold uppercase">Premises Details</span>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Type</span>
+              <span className="text-xs font-bold text-slate-900">{form.premises?.type || '-'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Floors</span>
+              <span className="text-xs font-bold text-slate-900">{form.premises?.floors || '-'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Rooms</span>
+              <span className="text-xs font-bold text-slate-900">{form.premises?.rooms || '-'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Measurement</span>
+              <span className="text-xs font-bold text-slate-900">{form.premises?.measurement || '-'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Schedule */}
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="bg-blue-600 px-4 py-2 flex items-center gap-2">
+            <Calendar size={14} className="text-white" />
+            <span className="text-white text-xs font-bold uppercase">Schedule</span>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Type</span>
+              <span className="text-xs font-bold text-slate-900">{form.schedule?.type || '-'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Date</span>
+              <span className="text-xs font-bold text-slate-900">{form.schedule?.date || '-'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Time</span>
+              <span className="text-xs font-bold text-slate-900">{form.schedule?.time || '-'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Billing */}
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="bg-emerald-600 px-4 py-2 flex items-center gap-2">
+            <IndianRupee size={14} className="text-white" />
+            <span className="text-white text-xs font-bold uppercase">Billing</span>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Total Amount</span>
+              <span className="text-xs font-bold text-slate-900">₹{form.billing?.total || 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Discount</span>
+              <span className="text-xs font-bold text-slate-900">₹{form.billing?.discount || 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Advance Paid</span>
+              <span className="text-xs font-bold text-emerald-600">₹{form.billing?.advance || 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Balance Due</span>
+              <span className="text-xs font-bold text-amber-600">₹{form.billing?.due || 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Payment Mode</span>
+              <span className="text-xs font-bold text-slate-900">{form.billing?.paymentMode || '-'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Payment Detail</span>
+              <span className="text-xs font-bold text-slate-900">{form.billing?.paymentDetail || '-'}</span>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Logistics - Only for field staff */}
+      {isFieldStaff && form.logistics && (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="bg-indigo-600 px-4 py-2 flex items-center gap-2">
+            <Truck size={14} className="text-white" />
+            <span className="text-white text-xs font-bold uppercase">Logistics</span>
+          </div>
+          <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">Vehicle No</span>
+              <span className="text-xs font-bold text-slate-900">{form.logistics?.vehicleNo || '-'}</span>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">Start KM</span>
+              <span className="text-xs font-bold text-slate-900">{form.logistics?.startMeter || '-'}</span>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">End KM</span>
+              <span className="text-xs font-bold text-slate-900">{form.logistics?.endMeter || '-'}</span>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">Total KM</span>
+              <span className="text-xs font-bold text-slate-900">
+                {form.logistics?.endMeter && form.logistics?.startMeter 
+                  ? parseInt(form.logistics.endMeter) - parseInt(form.logistics.startMeter) 
+                  : '-'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
