@@ -27,9 +27,9 @@ const DashboardLayout = () => {
     { to: '/enquiries', icon: <Mail size={18} />, label: 'Enquiries', roles: ['super_admin', 'branch_admin', 'office'] },
     { to: '/receipts', icon: <IndianRupee size={18} />, label: 'Receipts', roles: ['super_admin', 'branch_admin', 'technician', 'sales', 'office'] },
     { to: '/collections', icon: <Wallet size={18} />, label: 'Collections', roles: ['super_admin', 'branch_admin', 'office'] },
-    { to: '/inventory', icon: <Package size={18} />, label: 'Inventory', roles: ['super_admin', 'branch_admin', 'technician', 'office'] },
-    { to: '/expenses', icon: <Receipt size={18} />, label: 'Expenses', roles: ['super_admin', 'branch_admin', 'technician', 'sales', 'office'] },
-    { to: '/reports', icon: <BarChart3 size={18} />, label: 'Reports', roles: ['super_admin', 'branch_admin', 'office'] },
+    { to: '/inventory', icon: <Package size={18} />, label: 'Inventory', roles: ['super_admin', 'branch_admin', 'technician'] },
+    { to: '/expenses', icon: <Receipt size={18} />, label: 'Expenses', roles: ['super_admin', 'branch_admin', 'technician', 'office'] },
+    { to: '/reports', icon: <BarChart3 size={18} />, label: 'Reports', roles: ['super_admin', 'branch_admin'] },
     { to: '/settings', icon: <ShieldCheck size={18} />, label: 'Settings', roles: ['super_admin', 'branch_admin'] },
   ];
 
