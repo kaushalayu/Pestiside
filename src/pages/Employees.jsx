@@ -12,7 +12,10 @@ const Employees = () => {
   const { user } = useSelector(state => state.auth);
   const isAdmin = user?.role === 'super_admin' || user?.role === 'branch_admin';
   const queryClient = useQueryClient();
-  const { data: employees, isLoading } = useQuery({ queryKey: ['employees'], queryFn: fetchEmployees });
+  const { data: employees, isLoading } = useQuery({ 
+    queryKey: ['employees'], 
+    queryFn: fetchEmployees,
+  });
   const { data: branches } = useQuery({ queryKey: ['branches'], queryFn: fetchBranches, enabled: isAdmin });
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -79,16 +82,15 @@ const Employees = () => {
 
   const deleteMutation = useMutation({
     mutationFn: (id) => api.delete(`/employees/${id}`),
-    onSuccess: (data) => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries(['employees']);
-      // If server returned a 200 instead of 204, it means it was a deactivation (based on my controller logic)
-      if (data.status === 200) {
-        toast.success('Personnel Offline: Protocol Integrity preserved');
+      if (res.data?.deactivated) {
+        toast.success('Employee deactivated (has job history)');
       } else {
-        toast.success('Subject Purged: Master Registry Updated');
+        toast.success('Employee deleted successfully');
       }
     },
-    onError: (err) => toast.error(err.response?.data?.message || 'Purge Authorization Denied')
+    onError: (err) => toast.error(err.response?.data?.message || 'Delete failed')
   });
 
   const handleDelete = (emp) => {
@@ -194,27 +196,36 @@ const Employees = () => {
                          {emp.branchId ? (typeof emp.branchId === 'object' ? emp.branchId.branchName : emp.branchId) : 'CENTRAL_HUB'}
                       </span>
                    </div>
-                </div>
-                
-                <div className="absolute top-6 right-8 z-20 flex flex-col items-center gap-2 group-hover:translate-x-0 transition-all">
-                   <button onClick={() => { 
-                      const cleanEmp = { ...emp };
-                      if (cleanEmp.branchId && typeof cleanEmp.branchId === 'object') {
-                         cleanEmp.branchId = cleanEmp.branchId._id;
-                      }
-                      setTargetEmployee(emp); 
-                      setFormData(cleanEmp); 
-                      setIsModalOpen(true); 
-                   }} className="p-3 bg-white border-2 border-slate-100 hover:border-slate-900 hover:text-slate-900 text-slate-300 rounded-xl transition-all" title="Edit Master Records">
-                      <Edit3 size={16} />
+               </div>
+               
+               <div className="flex items-center justify-end gap-2 mt-4 pt-4 border-t border-slate-100">
+                   <button 
+                     onClick={() => { 
+                        const cleanEmp = { ...emp };
+                        if (cleanEmp.branchId && typeof cleanEmp.branchId === 'object') {
+                           cleanEmp.branchId = cleanEmp.branchId._id;
+                        }
+                        setTargetEmployee(emp); 
+                        setFormData(cleanEmp); 
+                        setIsModalOpen(true); 
+                     }} 
+                     className="px-4 py-2 bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-600 rounded-lg text-xs font-bold transition-all flex items-center gap-2"
+                   >
+                      <Edit3 size={14} /> Edit
                    </button>
-                   <button onClick={() => { setTargetEmployee(emp); setResetModalOpen(true); }} className="p-3 bg-white border-2 border-slate-100 hover:border-slate-900 hover:text-brand-600 text-slate-300 rounded-xl transition-all" title="Override Security Credentials">
-                      <Key size={16} />
+                   <button 
+                     onClick={() => { setTargetEmployee(emp); setResetModalOpen(true); }} 
+                     className="px-4 py-2 bg-slate-100 hover:bg-amber-500 hover:text-white text-slate-600 rounded-lg text-xs font-bold transition-all flex items-center gap-2"
+                   >
+                      <Key size={14} /> Reset
                    </button>
-                   <button onClick={() => handleDelete(emp)} className="p-3 bg-white border-2 border-slate-100 hover:border-red-900 hover:text-red-600 text-slate-300 rounded-xl transition-all" title="Purge Record">
-                      <Trash2 size={16} />
+                   <button 
+                     onClick={() => handleDelete(emp)} 
+                     className="px-4 py-2 bg-slate-100 hover:bg-red-600 hover:text-white text-slate-600 rounded-lg text-xs font-bold transition-all flex items-center gap-2"
+                   >
+                      <Trash2 size={14} /> Delete
                    </button>
-                </div>
+               </div>
              </div>
            ))
          ) : (
