@@ -89,6 +89,7 @@ const CreateForm = () => {
   const [customerSearch, setCustomerSearch] = useState('');
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isLoadingForm, setIsLoadingForm] = useState(false);
   const startFileRef = useRef(null);
   const endFileRef = useRef(null);
 
@@ -295,9 +296,11 @@ const CreateForm = () => {
 
   useEffect(() => {
     if (editId) {
+      setIsLoadingForm(true);
       api.get(`/forms/${editId}`).then(res => {
         const form = res.data.data;
         setFormData({
+          _id: form._id,
           branchId: form.branchId?._id || form.branchId || '',
           customerId: form.customerId || '',
           customer: form.customer || { title: 'Mr.', name: '', address: '', city: '', gstNo: '', phone: '', whatsapp: '', email: '' },
@@ -312,7 +315,15 @@ const CreateForm = () => {
           signatures: { employeeSignature: null, customerSignature: null },
           logistics: form.logistics || { vehicleNo: '', startMeter: '', endMeter: '', startMeterPhoto: '', endMeterPhoto: '' }
         });
+        
+        if (form.customer?.name) {
+          setCustomerSearch(form.customer.name);
+          setSelectedCustomerId(form.customerId || '');
+        }
+        
+        setIsLoadingForm(false);
       }).catch(err => {
+        setIsLoadingForm(false);
         toast.error('Failed to load form data');
         navigate('/forms');
       });
@@ -354,11 +365,19 @@ const CreateForm = () => {
     mutation.mutate({ ...formData, signatures: { employeeSignature: empSig, customerSignature: custSig } });
   };
 
+  if (isLoadingForm) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
       <div className="max-w-6xl mx-auto p-4 md:p-6">
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-400 hover:text-slate-900 transition-colors mb-4">
-           <ChevronLeft size={16} /> <span className="text-[10px] font-bold uppercase tracking-wider">Back to Archive</span>
+           <ChevronLeft size={16} /> <span className="text-[10px] font-bold uppercase tracking-wider">{isEditing ? 'Back to Form' : 'Back to Archive'}</span>
         </button>
       </div>
 
