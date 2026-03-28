@@ -53,23 +53,23 @@ const Login = () => {
         {/* Elegant typography over dark theme */}
         <div className="relative z-10 flex flex-col gap-6 max-w-lg">
            <div className="flex items-center gap-3">
-             <div className="flex items-center justify-center w-14 h-14 bg-green-500/10 rounded-2xl border border-green-500/20">
-               <ShieldCheck className="text-green-400 w-8 h-8" />
+             <div className="flex items-center justify-center w-16 h-16 bg-green-500/10 rounded-2xl border border-green-500/20 shadow-lg shadow-green-500/10">
+               <ShieldCheck className="text-green-400 w-9 h-9" />
              </div>
-             <h1 className="text-3xl font-display font-bold text-white tracking-tight">SafeHome</h1>
+             <h1 className="text-4xl font-display font-bold text-white tracking-tight">SafeHome</h1>
            </div>
            
            <h2 className="text-5xl font-display font-medium text-white leading-tight tracking-tight mt-12">
              Healthy Choice <br/> <span className="text-green-400 italic">For Healthy Home.</span>
            </h2>
            
-           <p className="text-slate-400 text-lg leading-relaxed max-w-md mt-6 font-light">
+           <p className="text-lg text-slate-400 leading-relaxed max-w-md mt-6 font-light">
              Enterprise-grade field control analytics designed specifically for robust CRM and operations management.
            </p>
         </div>
         
         <div className="relative z-10 flex items-center gap-4 text-slate-500 text-sm font-medium">
-          <Leaf className="w-4 h-4 text-green-500" />
+          <Leaf className="w-5 h-5 text-green-500" />
           Powered by Pestochem India Pvt Ltd.
         </div>
       </motion.div>
@@ -88,7 +88,7 @@ const Login = () => {
               <p className="text-slate-500 mt-2 font-medium">Please enter your credentials to access the portal.</p>
             </div>
 
-            <form onSubmit={handleLogin} className="space-y-6" autoComplete="off">
+            <form onSubmit={handleLogin} className="space-y-5" autoComplete="off">
                
                <AnimatePresence>
                  {error && (
@@ -104,7 +104,7 @@ const Login = () => {
                </AnimatePresence>
 
                {/* Email Input */}
-               <div className="flex flex-col gap-2">
+               <div className="flex flex-col gap-2.5">
                   <label className="text-sm font-semibold text-slate-700 ml-1">Email Address</label>
                   <div className="relative flex items-center">
                     <div className="absolute left-0 pl-4 flex items-center pointer-events-none">
@@ -116,14 +116,14 @@ const Login = () => {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       autoComplete="off"
-                      className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all duration-200 shadow-sm"
+                      className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-900 text-base placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all duration-200"
                       placeholder="admin@safehome.com"
                     />
                   </div>
                </div>
 
                {/* Password Input */}
-               <div className="flex flex-col gap-2">
+               <div className="flex flex-col gap-2.5">
                   <div className="flex items-center justify-between ml-1">
                      <label className="text-sm font-semibold text-slate-700">Password</label>
                       <a href="/forgot-password" className="text-sm font-semibold text-green-600 hover:text-green-500 transition-colors">Forgot password?</a>
@@ -138,20 +138,20 @@ const Login = () => {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       autoComplete="new-password"
-                      className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all duration-200 shadow-sm"
-                      placeholder="••••••••"
+                      className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-900 text-base placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all duration-200"
+                      placeholder="Enter your password"
                     />
                   </div>
                </div>
 
                {/* Submit Button */}
-               <div className="pt-4">
+               <div className="pt-2">
                  <button 
                     disabled={isLoading}
                     type="submit" 
-                    className="w-full py-3.5 px-6 rounded-xl bg-green-600 hover:bg-green-500 text-white font-semibold shadow-lg shadow-green-500/25 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between group"
+                    className="w-full py-4 px-6 rounded-xl bg-green-600 hover:bg-green-500 text-white font-semibold shadow-lg shadow-green-500/25 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between group text-base"
                  >
-                    <span className="text-base tracking-wide">
+                    <span className="tracking-wide">
                       {isLoading ? 'Authenticating...' : 'Sign In Securely'}
                     </span>
                     {!isLoading && <MoveRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
