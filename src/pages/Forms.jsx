@@ -4,7 +4,7 @@ import { useSelector } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Plus, Search, FileText, Download, Filter, Eye, 
-  ChevronRight, Calendar, User, IndianRupee, MapPin, Receipt, ArrowRight, ShieldCheck, Phone, Database, Activity
+  ChevronRight, Calendar, User, IndianRupee, MapPin, Receipt, ArrowRight, ShieldCheck, Phone, Database, Activity, Edit3
 } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
@@ -171,22 +171,31 @@ const Forms = () => {
                        </span>
                     </td>
                     <td className="px-6 py-5 text-right">
-                       <div className="flex items-center justify-end gap-2 transition-opacity">
-                          <button 
-                             onClick={() => handleDownloadPdf(form._id, form.orderNo)}
-                             className="p-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-900 hover:text-white transition-all shadow-none"
-                             title="Download PDF Log"
-                          >
-                             <Download size={16} />
-                          </button>
-                          <button 
-                             onClick={() => navigate(`/forms/${form._id}`)}
-                             className="p-2 bg-brand-50 text-brand-600 rounded-lg hover:bg-brand-600 hover:text-white transition-all shadow-none"
-                             title="Audit Review"
-                          >
-                             <Eye size={16} />
-                          </button>
-                       </div>
+                        <div className="flex items-center justify-end gap-2 transition-opacity">
+                           {form.status !== 'COMPLETED' && form.status !== 'CANCELLED' && (
+                             <button 
+                                onClick={() => navigate(`/forms/create?edit=${form._id}`)}
+                                className="p-2 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-600 hover:text-white transition-all shadow-none"
+                                title="Edit Form"
+                             >
+                                <Edit3 size={16} />
+                             </button>
+                           )}
+                           <button 
+                              onClick={() => handleDownloadPdf(form._id, form.orderNo)}
+                              className="p-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-900 hover:text-white transition-all shadow-none"
+                              title="Download PDF Log"
+                           >
+                              <Download size={16} />
+                           </button>
+                           <button 
+                              onClick={() => navigate(`/forms/${form._id}`)}
+                              className="p-2 bg-brand-50 text-brand-600 rounded-lg hover:bg-brand-600 hover:text-white transition-all shadow-none"
+                              title="Audit Review"
+                           >
+                              <Eye size={16} />
+                           </button>
+                        </div>
                     </td>
                   </tr>
                 ))

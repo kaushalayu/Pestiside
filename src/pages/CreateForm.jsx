@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
 import SignaturePad from '../components/SignaturePad';
@@ -61,6 +61,9 @@ const CreateForm = () => {
   const queryClient = useQueryClient();
   const { user } = useSelector(state => state.auth);
   const isFieldStaff = user?.role === 'technician' || user?.role === 'sales';
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('edit');
+  const isEditing = !!editId;
 
   const [formData, setFormData] = useState({
     branchId: '',
@@ -273,9 +276,14 @@ const CreateForm = () => {
   };
 
   const mutation = useMutation({
-    mutationFn: (payload) => api.post('/forms', payload),
+    mutationFn: (payload) => {
+      if (isEditing) {
+        return api.put(`/forms/${editId}`, payload);
+      }
+      return api.post('/forms', payload);
+    },
     onSuccess: () => {
-      toast.success('Service Record Generated');
+      toast.success(isEditing ? 'Service Record Updated' : 'Service Record Generated');
       queryClient.invalidateQueries(['forms']);
       navigate('/forms');
     },
@@ -284,6 +292,32 @@ const CreateForm = () => {
       setIsLoading(false);
     }
   });
+
+  useEffect(() => {
+    if (editId) {
+      api.get(`/forms/${editId}`).then(res => {
+        const form = res.data.data;
+        setFormData({
+          branchId: form.branchId?._id || form.branchId || '',
+          customerId: form.customerId || '',
+          customer: form.customer || { title: 'Mr.', name: '', address: '', city: '', gstNo: '', phone: '', whatsapp: '', email: '' },
+          serviceCategory: form.serviceCategory || 'Residential',
+          reference: form.reference || 'Walk-in',
+          attDetails: form.attDetails || { constructionPhase: '', treatmentType: '', chemical: '', method: 'Drill', base: 'Water' },
+          amcServices: form.amcServices || [],
+          premises: form.premises || { type: '', floors: '', otherArea: '', measurement: '', rooms: '' },
+          schedule: form.schedule || { type: 'Single', date: '', time: '' },
+          billing: form.billing || { paymentMode: 'Cash', advance: '', due: '', total: '', discount: '', paymentDetail: '', transactionNo: '', paymentImage: '' },
+          contract: form.contract || { contractNo: '', period: '', warranty: '', startDate: '', endDate: '' },
+          signatures: { employeeSignature: null, customerSignature: null },
+          logistics: form.logistics || { vehicleNo: '', startMeter: '', endMeter: '', startMeterPhoto: '', endMeterPhoto: '' }
+        });
+      }).catch(err => {
+        toast.error('Failed to load form data');
+        navigate('/forms');
+      });
+    }
+  }, [editId]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -767,7 +801,7 @@ const CreateForm = () => {
              type="submit" 
              className="w-full py-4 bg-slate-900 text-white rounded-lg font-bold uppercase text-xs tracking-wider hover:bg-slate-800 disabled:opacity-50 flex items-center justify-center gap-3 shadow-lg"
           >
-             {isLoading ? 'Processing...' : 'Generate Service Record'}
+             {isLoading ? 'Processing...' : (isEditing ? 'Update Service Record' : 'Generate Service Record')}
           </button>
         </div>
       </form>
