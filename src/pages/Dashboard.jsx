@@ -27,23 +27,33 @@ const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-const StatCard = ({ title, value, subtitle, icon: Icon, color = 'emerald' }) => (
-  <div className={`bg-white rounded-2xl p-6 border border-${color}-100 group overflow-hidden relative transition-all hover:shadow-xl hover:-translate-y-1`}>
-    <div className={`absolute top-0 right-0 p-3 opacity-[0.03] group-hover:rotate-12 transition-transform duration-500`}>
-      <Icon size={70} />
-    </div>
-    <div className="flex items-start justify-between relative z-10">
-      <div>
-        <h4 className="text-slate-500 font-semibold uppercase text-xs tracking-wider mb-2">{title}</h4>
-        <h2 className="text-3xl md:text-4xl font-display font-bold text-slate-900 tracking-tight">{value}</h2>
-        {subtitle && <p className="text-xs text-slate-400 mt-1">{subtitle}</p>}
+const StatCard = ({ title, value, subtitle, icon: IconComponent, color = 'emerald' }) => {
+  const colorStyles = {
+    blue: { border: 'border-blue-100', bg: 'bg-blue-600' },
+    amber: { border: 'border-amber-100', bg: 'bg-amber-600' },
+    emerald: { border: 'border-emerald-100', bg: 'bg-emerald-600' },
+    purple: { border: 'border-purple-100', bg: 'bg-purple-600' },
+  };
+  const styles = colorStyles[color] || colorStyles.emerald;
+  
+  return (
+    <div className={`bg-white rounded-2xl p-4 md:p-6 border ${styles.border} group overflow-hidden relative transition-all hover:shadow-xl hover:-translate-y-1`}>
+      <div className="absolute top-0 right-0 p-3 opacity-[0.03] group-hover:rotate-12 transition-transform duration-500">
+        <IconComponent size={70} />
       </div>
-      <div className={`p-3 rounded-xl bg-${color}-600 text-white shadow-lg`}>
-        <Icon size={22} />
+      <div className="flex items-start justify-between relative z-10">
+        <div className="min-w-0 flex-1">
+          <h4 className="text-slate-500 font-semibold uppercase text-[10px] md:text-xs tracking-wider mb-1 md:mb-2 truncate">{title}</h4>
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-display font-bold text-slate-900 tracking-tight leading-tight">{value}</h2>
+          {subtitle && <p className="text-[9px] md:text-xs text-slate-400 mt-1 truncate">{subtitle}</p>}
+        </div>
+        <div className={`p-2 md:p-3 rounded-xl ${styles.bg} text-white shadow-lg flex-shrink-0`}>
+          <IconComponent size={18} className="md:w-[22px] md:h-[22px]" />
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -122,7 +132,7 @@ const Dashboard = () => {
 
       {/* Super Admin & Branch Admin: All Stats */}
       {isAdmin && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           <StatCard title="Forms Today" value={stats.forms?.today || 0} subtitle={`${stats.forms?.week || 0} this week`} icon={FileText} color="blue" />
           <StatCard title="Pending Revenue" value={`₹${(stats.pendingRevenue || 0).toLocaleString('en-IN')}`} subtitle="Outstanding" icon={IndianRupee} color="amber" />
           <StatCard title="Today's Collection" value={`₹${(stats.todayCollection || 0).toLocaleString('en-IN')}`} subtitle="Collected" icon={Receipt} color="emerald" />
@@ -139,26 +149,26 @@ const Dashboard = () => {
               {isSuperAdmin ? 'All Branches - HQ Financial Summary' : 'HQ Financial Summary'}
             </h3>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
-              <p className="text-slate-400 font-semibold uppercase text-[9px] tracking-wider mb-1">Stock Given</p>
-              <p className="text-xl md:text-2xl font-display font-black text-purple-400">₹{((hqSummary.totals?.totalInventoryValue) || hqSummary.totalInventoryValue || 0).toLocaleString('en-IN')}</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
+            <div className="bg-slate-800/50 rounded-xl p-3 md:p-4 border border-slate-700">
+              <p className="text-slate-400 font-semibold uppercase text-[9px] md:text-[10px] tracking-wider mb-1 truncate">Stock Given</p>
+              <p className="text-lg md:text-2xl font-display font-black text-purple-400 truncate">₹{((hqSummary.totals?.totalInventoryValue) || hqSummary.totalInventoryValue || 0).toLocaleString('en-IN')}</p>
             </div>
-            <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
-              <p className="text-slate-400 font-semibold uppercase text-[9px] tracking-wider mb-1">Paid to HQ</p>
-              <p className="text-xl md:text-2xl font-display font-black text-blue-400">₹{((hqSummary.totals?.totalPaidToHQ) || hqSummary.totalPaidToHQ || 0).toLocaleString('en-IN')}</p>
+            <div className="bg-slate-800/50 rounded-xl p-3 md:p-4 border border-slate-700">
+              <p className="text-slate-400 font-semibold uppercase text-[9px] md:text-[10px] tracking-wider mb-1 truncate">Paid to HQ</p>
+              <p className="text-lg md:text-2xl font-display font-black text-blue-400 truncate">₹{((hqSummary.totals?.totalPaidToHQ) || hqSummary.totalPaidToHQ || 0).toLocaleString('en-IN')}</p>
             </div>
-            <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
-              <p className="text-slate-400 font-semibold uppercase text-[9px] tracking-wider mb-1">Pending to HQ</p>
-              <p className="text-xl md:text-2xl font-display font-black text-amber-400">₹{((hqSummary.totals?.pendingBalance) || hqSummary.pendingBalance || 0).toLocaleString('en-IN')}</p>
+            <div className="bg-slate-800/50 rounded-xl p-3 md:p-4 border border-slate-700">
+              <p className="text-slate-400 font-semibold uppercase text-[9px] md:text-[10px] tracking-wider mb-1 truncate">Pending to HQ</p>
+              <p className="text-lg md:text-2xl font-display font-black text-amber-400 truncate">₹{((hqSummary.totals?.pendingBalance) || hqSummary.pendingBalance || 0).toLocaleString('en-IN')}</p>
             </div>
-            <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
-              <p className="text-slate-400 font-semibold uppercase text-[9px] tracking-wider mb-1">Pending from Customers</p>
-              <p className="text-xl md:text-2xl font-display font-black text-red-400">₹{((hqSummary.totals?.pendingFromCustomers) || hqSummary.pendingFromCustomers || 0).toLocaleString('en-IN')}</p>
+            <div className="bg-slate-800/50 rounded-xl p-3 md:p-4 border border-slate-700">
+              <p className="text-slate-400 font-semibold uppercase text-[9px] md:text-[10px] tracking-wider mb-1 truncate">Pending Cust.</p>
+              <p className="text-lg md:text-2xl font-display font-black text-red-400 truncate">₹{((hqSummary.totals?.pendingFromCustomers) || hqSummary.pendingFromCustomers || 0).toLocaleString('en-IN')}</p>
             </div>
-            <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
-              <p className="text-slate-400 font-semibold uppercase text-[9px] tracking-wider mb-1">HQ Received</p>
-              <p className="text-xl md:text-2xl font-display font-black text-emerald-400">₹{((hqSummary.totals?.totalReceivedFromHQ) || hqSummary.totalReceivedFromHQ || 0).toLocaleString('en-IN')}</p>
+            <div className="bg-slate-800/50 rounded-xl p-3 md:p-4 border border-slate-700 col-span-2 sm:col-span-1">
+              <p className="text-slate-400 font-semibold uppercase text-[9px] md:text-[10px] tracking-wider mb-1 truncate">HQ Received</p>
+              <p className="text-lg md:text-2xl font-display font-black text-emerald-400 truncate">₹{((hqSummary.totals?.totalReceivedFromHQ) || hqSummary.totalReceivedFromHQ || 0).toLocaleString('en-IN')}</p>
             </div>
           </div>
         </div>
@@ -166,7 +176,7 @@ const Dashboard = () => {
 
       {/* Technician/Sales: My Stats */}
       {isTechnician && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           <StatCard title="My Forms Today" value={stats.forms?.today || 0} subtitle={`${stats.forms?.week || 0} this week`} icon={FileText} color="blue" />
           <StatCard title="My Pending Revenue" value={`₹${(stats.pendingRevenue || 0).toLocaleString('en-IN')}`} subtitle="Outstanding" icon={IndianRupee} color="amber" />
           <StatCard title="My Collection Today" value={`₹${(stats.todayCollection || 0).toLocaleString('en-IN')}`} subtitle="Collected" icon={Receipt} color="emerald" />
@@ -176,7 +186,7 @@ const Dashboard = () => {
 
       {/* Office: Branch Stats */}
       {isOffice && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           <StatCard title="Branch Forms Today" value={stats.forms?.today || 0} subtitle={`${stats.forms?.week || 0} this week`} icon={FileText} color="blue" />
           <StatCard title="Pending Revenue" value={`₹${(stats.pendingRevenue || 0).toLocaleString('en-IN')}`} subtitle="Outstanding" icon={IndianRupee} color="amber" />
           <StatCard title="Today's Collection" value={`₹${(stats.todayCollection || 0).toLocaleString('en-IN')}`} subtitle="Collected" icon={Receipt} color="emerald" />
@@ -219,22 +229,24 @@ const Dashboard = () => {
             <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Enquiry Status</h3>
             {funnelData.length > 0 ? (
               <div className="flex flex-col items-center">
-                <PieChart width={180} height={180}>
-                  <Pie
-                    data={funnelData}
-                    cx={90}
-                    cy={90}
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    {funnelData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
+                <div className="w-full max-w-[180px] aspect-square">
+                  <PieChart width="100%" height="100%" viewBox="0 0 180 180">
+                    <Pie
+                      data={funnelData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius="28%"
+                      outerRadius="45%"
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {funnelData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </div>
                 <div className="mt-4 space-y-2 w-full">
                   {funnelData.map((item, idx) => (
                     <div key={item.name} className="flex items-center justify-between text-xs">
@@ -255,8 +267,8 @@ const Dashboard = () => {
       )}
 
       {/* Recent Activity - For Everyone */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl border border-slate-200 p-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6">
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 md:p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">
               {isTechnician ? 'My Recent Activity' : 'Recent Activity'}
@@ -292,7 +304,7 @@ const Dashboard = () => {
 
         {/* Pending Approvals - Admin Only */}
         {isAdmin && (
-          <div className="bg-white rounded-2xl border border-slate-200 p-6">
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 md:p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                 <AlertCircle size={14} className="text-amber-500" />
@@ -343,7 +355,7 @@ const Dashboard = () => {
 
         {/* Technician: Quick Actions */}
         {isTechnician && (
-          <div className="bg-white rounded-2xl border border-slate-200 p-6">
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 md:p-6">
             <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Quick Actions</h3>
             <div className="space-y-3">
               <button 

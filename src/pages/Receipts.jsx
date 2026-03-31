@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { IndianRupee, Plus, Search, Download, CheckCircle2, Mail, Eye, X, Send, RefreshCw, Edit3, Trash2, CheckSquare, FileCheck, FileText, FileSpreadsheet, ChevronDown, Calendar, Building2, User } from 'lucide-react';
+import { IndianRupee, Plus, Download, CheckCircle2, Mail, Eye, X, Send, FileCheck, ChevronDown, Building2, User } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
@@ -17,7 +17,7 @@ const Receipts = () => {
   const { data: receipts, isLoading } = useQuery({ queryKey: ['receipts'], queryFn: fetchReceipts });
   const { data: branches } = useQuery({
     queryKey: ['branches'],
-    fn: fetchBranches,
+    queryFn: fetchBranches,
     enabled: user?.role === 'super_admin' || user?.role === 'branch_admin'
   });
   const { data: forms } = useQuery({
@@ -287,15 +287,15 @@ const Receipts = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500 font-bold">
+          <table className="w-full text-sm min-w-[600px]">
+            <thead className="bg-slate-50 text-[9px] sm:text-xs uppercase text-slate-500 font-bold">
               <tr>
-                <th className="px-4 py-3 text-left">Receipt No</th>
-                <th className="px-4 py-3 text-left">Customer</th>
-                <th className="px-4 py-3 text-left">Service</th>
-                <th className="px-4 py-3 text-right">Amount</th>
-                <th className="px-4 py-3 text-center">Status</th>
-                <th className="px-4 py-3 text-center">Actions</th>
+                <th className="px-2 sm:px-4 py-3 text-left">Receipt No</th>
+                <th className="px-2 sm:px-4 py-3 text-left">Customer</th>
+                <th className="px-2 sm:px-4 py-3 text-left hidden sm:table-cell">Service</th>
+                <th className="px-2 sm:px-4 py-3 text-right">Amount</th>
+                <th className="px-2 sm:px-4 py-3 text-center">Status</th>
+                <th className="px-2 sm:px-4 py-3 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -303,28 +303,28 @@ const Receipts = () => {
                 <tr><td colSpan="6" className="px-4 py-12 text-center text-slate-400">Loading...</td></tr>
               ) : filtered?.length > 0 ? filtered.map(rec => (
                 <tr key={rec._id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3">
-                    <p className="font-bold text-slate-900">{rec.receiptNo || 'N/A'}</p>
-                    <p className="text-xs text-slate-400">{rec.branchId?.branchName}</p>
+                  <td className="px-2 sm:px-4 py-3">
+                    <p className="font-bold text-slate-900 text-xs">{rec.receiptNo || 'N/A'}</p>
+                    <p className="text-[9px] sm:text-xs text-slate-400">{rec.branchId?.branchName}</p>
                   </td>
-                  <td className="px-4 py-3">
-                    <p className="font-semibold">{rec.customerName}</p>
-                    <p className="text-xs text-slate-400">{rec.customerPhone}</p>
+                  <td className="px-2 sm:px-4 py-3">
+                    <p className="font-semibold text-xs truncate max-w-[100px] sm:max-w-none">{rec.customerName}</p>
+                    <p className="text-[9px] sm:text-xs text-slate-400">{rec.customerPhone}</p>
                   </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 text-xs font-bold rounded ${rec.serviceType === 'AMC' ? 'bg-emerald-100 text-emerald-700' : rec.serviceType === 'ATT' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                  <td className="px-2 sm:px-4 py-3 hidden sm:table-cell">
+                    <span className={`px-2 py-1 text-[10px] sm:text-xs font-bold rounded ${rec.serviceType === 'AMC' ? 'bg-emerald-100 text-emerald-700' : rec.serviceType === 'ATT' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
                       {rec.serviceType}
                     </span>
-                    <p className="text-xs text-slate-400 mt-1">{rec.category}</p>
+                    <p className="text-[9px] sm:text-xs text-slate-400 mt-1 hidden md:block">{rec.category}</p>
                   </td>
-                  <td className="px-4 py-3 text-right font-bold">₹{(rec.totalAmount || 0).toLocaleString('en-IN')}</td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`px-2 py-1 text-xs font-bold rounded border ${getStatusStyle(rec.status)}`}>{rec.status}</span>
+                  <td className="px-2 sm:px-4 py-3 text-right font-bold text-xs">₹{(rec.totalAmount || 0).toLocaleString('en-IN')}</td>
+                  <td className="px-2 sm:px-4 py-3 text-center">
+                    <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 text-[9px] sm:text-xs font-bold rounded border ${getStatusStyle(rec.status)}`}>{rec.status}</span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-2 sm:px-4 py-3">
                     <div className="flex items-center justify-center gap-1">
-                      <button onClick={() => setViewReceipt(rec)} className="px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 flex items-center gap-1">
-                        <Eye size={12} /> View
+                      <button onClick={() => setViewReceipt(rec)} className="px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 flex items-center gap-1">
+                        <Eye size={10} className="sm:w-3 sm:h-3" />
                       </button>
                       <button onClick={async () => {
                         try {
@@ -335,8 +335,8 @@ const Receipts = () => {
                           document.body.appendChild(link); link.click();
                           toast.success('PDF Downloaded');
                         } catch (err) { toast.error('PDF Failed'); }
-                      }} className="px-3 py-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200 flex items-center gap-1">
-                        <Download size={12} /> PDF
+                      }} className="px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200 flex items-center gap-1">
+                        <Download size={10} className="sm:w-3 sm:h-3" />
                       </button>
                     </div>
                   </td>

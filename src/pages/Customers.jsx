@@ -8,11 +8,9 @@ import toast from 'react-hot-toast';
 const fetchCustomers = async () => (await api.get('/customers')).data.data;
 
 const Customers = () => {
-  const { user } = useSelector(state => state.auth);
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
   const { data: customers, isLoading } = useQuery({ queryKey: ['customers'], queryFn: fetchCustomers });
 
   const [formData, setFormData] = useState({

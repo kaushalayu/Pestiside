@@ -20,7 +20,7 @@ const Enquiries = () => {
   const [page, setPage] = useState(1);
   const [activeBoard, setActiveBoard] = useState('ALL');
 
-  const { data: rawEnquiries, isLoading, data: paginationData } = useQuery({ 
+  const { data: rawEnquiries, isLoading } = useQuery({ 
      queryKey: ['enquiries', search, page], 
      queryFn: async () => {
         try {

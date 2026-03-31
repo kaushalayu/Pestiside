@@ -8,7 +8,6 @@ import {
   Receipt, Truck
 } from 'lucide-react';
 import api from '../lib/api';
-import toast from 'react-hot-toast';
 
 const Badge = ({ children, variant = 'default' }) => {
   const styles = {
@@ -32,7 +31,7 @@ const HQAccount = () => {
   const [filterType, setFilterType] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
 
-  const { data: dashboardData, isLoading, refetch } = useQuery({
+  const { data: dashboardData, isLoading } = useQuery({
     queryKey: ['hqAccountDashboard'],
     queryFn: async () => {
       const res = await api.get('/hq-account/dashboard');

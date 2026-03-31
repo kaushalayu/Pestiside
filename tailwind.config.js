@@ -17,7 +17,7 @@ export default {
           200: '#bbf7d0',
           300: '#86efac',
           400: '#4ade80',
-          500: '#22c55e', // SafeHome Emerald
+          500: '#22c55e',
           600: '#16a34a',
           700: '#15803d',
           800: '#166534',
@@ -27,7 +27,7 @@ export default {
         slate: {
           850: '#1e293b',
           900: '#0f172a',
-          950: '#020617', // Deep minimalist background
+          950: '#020617',
         }
       },
       animation: {
@@ -43,6 +43,18 @@ export default {
           '0%': { transform: 'translateY(20px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
         }
+      },
+      screens: {
+        'xs': '475px',
+        '3xl': '1920px',
+      },
+      spacing: {
+        '18': '4.5rem',
+        '88': '22rem',
+      },
+      maxWidth: {
+        '8xl': '88rem',
+        '9xl': '96rem',
       }
     },
   },

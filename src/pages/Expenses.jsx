@@ -148,7 +148,7 @@ const Expenses = () => {
       });
       setFormData(prev => ({ ...prev, billPhoto: res.data.data }));
       toast.success('Bill photo uploaded');
-    } catch (err) {
+    } catch (_err) {
       toast.error('Upload failed');
     } finally {
       setUploadingBill(false);
@@ -193,12 +193,6 @@ const Expenses = () => {
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Delete failed'),
   });
-
-  const handleDelete = (expense) => {
-    if (window.confirm('Are you sure you want to delete this expense?')) {
-      deleteMutation.mutate(expense._id);
-    }
-  };
 
   const handleApprove = (expense, customStatus = 'APPROVED') => {
     let confirmMsg = `Approve expense of ₹${expense.amount} for ${expense.employeeId?.name}?`;
@@ -266,30 +260,30 @@ const Expenses = () => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-            <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Today's Expenses</p>
-            <p className="text-2xl font-black text-slate-900">{formatCurrency(stats?.todayTotal || 0)}</p>
-            <p className="text-xs text-slate-400 mt-1">{stats?.todayCount || 0} entries</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
+          <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-100 shadow-sm">
+            <p className="text-[10px] md:text-xs font-semibold text-slate-500 uppercase mb-1 md:mb-2">Today</p>
+            <p className="text-xl md:text-2xl font-black text-slate-900 truncate">{formatCurrency(stats?.todayTotal || 0)}</p>
+            <p className="text-[9px] md:text-xs text-slate-400 mt-1">{stats?.todayCount || 0} entries</p>
           </div>
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-2xl text-white shadow-lg">
-            <p className="text-xs font-semibold text-slate-400 uppercase mb-2">Total Expenses</p>
-            <p className="text-2xl font-black">{formatCurrency(stats?.overallTotal || 0)}</p>
-            <p className="text-xs text-slate-400 mt-1">{stats?.overallCount || 0} entries</p>
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-4 md:p-5 rounded-2xl text-white shadow-lg">
+            <p className="text-[10px] md:text-xs font-semibold text-slate-400 uppercase mb-1 md:mb-2">Total</p>
+            <p className="text-xl md:text-2xl font-black truncate">{formatCurrency(stats?.overallTotal || 0)}</p>
+            <p className="text-[9px] md:text-xs text-slate-400 mt-1">{stats?.overallCount || 0} entries</p>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-            <p className="text-xs font-semibold text-amber-600 uppercase mb-2">
-              {isSuperAdmin ? 'Pending HQ' : 'Pending Branch'}
+          <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-100 shadow-sm">
+            <p className="text-[10px] md:text-xs font-semibold text-amber-600 uppercase mb-1 md:mb-2">
+              {isSuperAdmin ? 'Pend. HQ' : 'Pend. Branch'}
             </p>
-            <p className="text-2xl font-black text-amber-600">{isSuperAdmin ? pendingCount : branchPendingCount}</p>
-            <p className="text-xs text-slate-400 mt-1">Need review</p>
+            <p className="text-xl md:text-2xl font-black text-amber-600">{isSuperAdmin ? pendingCount : branchPendingCount}</p>
+            <p className="text-[9px] md:text-xs text-slate-400 mt-1">Need review</p>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-            <p className="text-xs font-semibold text-emerald-600 uppercase mb-2">Approved</p>
-            <p className="text-2xl font-black text-emerald-600">
+          <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-100 shadow-sm">
+            <p className="text-[10px] md:text-xs font-semibold text-emerald-600 uppercase mb-1 md:mb-2">Approved</p>
+            <p className="text-xl md:text-2xl font-black text-emerald-600">
               {expenses.filter(e => e.status === 'APPROVED').length}
             </p>
-            <p className="text-xs text-slate-400 mt-1">This month</p>
+            <p className="text-[9px] md:text-xs text-slate-400 mt-1">This month</p>
           </div>
         </div>
 
@@ -329,11 +323,11 @@ const Expenses = () => {
         )}
 
         <SectionCard title="Expense List" icon={Filter}>
-          <div className="flex flex-wrap gap-3 mb-5">
+          <div className="flex flex-wrap gap-2 md:gap-3 mb-5">
             <select 
               value={filterStatus}
               onChange={e => setFilterStatus(e.target.value)}
-              className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium"
+              className="px-2 sm:px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium flex-1 min-w-[120px]"
             >
               <option value="all">All Status</option>
               <option value="PENDING_BRANCH">Pending Branch</option>
@@ -344,7 +338,7 @@ const Expenses = () => {
             <select 
               value={filterCategory}
               onChange={e => setFilterCategory(e.target.value)}
-              className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium"
+              className="px-2 sm:px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium flex-1 min-w-[120px]"
             >
               <option value="all">All Categories</option>
               <option value="Travel">Travel</option>

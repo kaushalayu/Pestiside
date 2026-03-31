@@ -168,14 +168,11 @@ const Logistics = () => {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      console.log('Uploading photo...', file.name);
       const res = await api.post('/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      console.log('Upload success:', res.data.data);
       return res.data.data;
     } catch (error) {
-      console.error('Upload error:', error.response?.data || error.message);
       toast.error('Upload failed: ' + (error.response?.data?.message || error.message));
       return null;
     }
@@ -454,11 +451,9 @@ const Logistics = () => {
                   alt="Start meter" 
                   className="w-full h-16 object-cover rounded-lg border border-white mt-1 cursor-pointer"
                   onClick={() => {
-                    console.log('Admin view - opening start photo:', activeLog.startMeterPhoto);
                     window.open(activeLog.startMeterPhoto, '_blank');
                   }}
                   onError={(e) => {
-                    console.error('Admin start photo load error:', e.target.src);
                     e.target.style.display = 'none';
                   }}
                 />
@@ -475,11 +470,9 @@ const Logistics = () => {
                   alt="End meter" 
                   className="w-full h-16 object-cover rounded-lg border border-white mt-1 cursor-pointer"
                   onClick={() => {
-                    console.log('Admin view - opening end photo:', activeLog.endMeterPhoto);
                     window.open(activeLog.endMeterPhoto, '_blank');
                   }}
                   onError={(e) => {
-                    console.error('Admin end photo load error:', e.target.src);
                     e.target.style.display = 'none';
                   }}
                 />
@@ -537,13 +530,11 @@ const Logistics = () => {
                     alt="Start meter" 
                     className="w-full h-20 object-cover rounded-lg border-2 border-white cursor-pointer"
                     onClick={() => {
-                      console.log('Opening start photo:', activeLog.startMeterPhoto);
                       if (activeLog.startMeterPhoto) {
                         window.open(activeLog.startMeterPhoto, '_blank');
                       }
                     }}
                     onError={(e) => {
-                      console.error('Start photo load error:', e.target.src);
                       e.target.style.display = 'none';
                     }}
                   />
@@ -563,11 +554,9 @@ const Logistics = () => {
                     alt="End meter" 
                     className="w-full h-20 object-cover rounded-lg border-2 border-white cursor-pointer"
                     onClick={() => {
-                      console.log('Opening end photo:', travelData.endMeterPhoto);
                       window.open(travelData.endMeterPhoto, '_blank');
                     }}
                     onError={(e) => {
-                      console.error('End photo load error:', e.target.src);
                       e.target.style.display = 'none';
                     }}
                   />
@@ -604,11 +593,9 @@ const Logistics = () => {
                     alt="Start meter" 
                     className="w-full h-32 object-cover rounded-lg border-2 border-blue-200 cursor-pointer"
                     onClick={() => {
-                      console.log('Employee view - start photo:', activeLog.startMeterPhoto);
                       window.open(activeLog.startMeterPhoto, '_blank');
                     }}
                     onError={(e) => {
-                      console.error('Employee start photo error:', e.target.src);
                       e.target.style.display = 'none';
                     }}
                   />
@@ -666,17 +653,15 @@ const Logistics = () => {
                     <div className="relative">
                       <img 
                         src={travelData.endMeterPhoto} 
-                        alt="End meter" 
-                        className="w-full h-32 object-cover rounded-lg border-2 border-emerald-300 cursor-pointer"
-                        onClick={() => {
-                          console.log('Employee view - opening end photo:', travelData.endMeterPhoto);
-                          window.open(travelData.endMeterPhoto, '_blank');
-                        }}
-                        onError={(e) => {
-                          console.error('Employee end photo error:', e.target.src);
-                          e.target.style.display = 'none';
-                        }}
-                      />
+                      alt="End meter" 
+                      className="w-full h-32 object-cover rounded-lg border-2 border-emerald-300 cursor-pointer"
+                      onClick={() => {
+                        window.open(travelData.endMeterPhoto, '_blank');
+                      }}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                      }}
+                    />
                       <p className="text-[10px] text-emerald-600 text-center mt-1">Tap to enlarge</p>
                     </div>
                   ) : (

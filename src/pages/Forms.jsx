@@ -18,7 +18,6 @@ const Forms = () => {
   const { user } = useSelector(state => state.auth);
   const isAdmin = user?.role === 'super_admin' || user?.role === 'branch_admin';
   const isSuperAdmin = user?.role === 'super_admin';
-  const isFieldStaff = user?.role === 'technician' || user?.role === 'sales';
   const { data: forms, isLoading } = useQuery({ queryKey: ['forms'], queryFn: fetchForms });
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -60,18 +59,8 @@ const Forms = () => {
     }
   };
 
-  const getNextStatus = (currentStatus) => {
-    switch (currentStatus) {
-      case 'DRAFT': return 'SUBMITTED';
-      case 'SUBMITTED': return 'SCHEDULED';
-      case 'SCHEDULED': return 'COMPLETED';
-      default: return null;
-    }
-  };
-
   const getStatusActions = (form) => {
     const actions = [];
-    const isOwnForm = form.employeeId?._id === user?._id || form.employeeId === user?._id;
     
     // EVERYONE can directly complete - no permission needed!
     if (form.status !== 'COMPLETED' && form.status !== 'CANCELLED') {
@@ -129,7 +118,7 @@ const Forms = () => {
       document.body.appendChild(link);
       link.click();
       toast.success('PDF Generated');
-    } catch (err) {
+    } catch {
       toast.error('PDF Generation Failed');
     }
   };
@@ -144,7 +133,7 @@ const Forms = () => {
       document.body.appendChild(link);
       link.click();
       toast.success('Service PDF Generated');
-    } catch (err) {
+    } catch {
       toast.error('PDF Generation Failed');
     }
   };
@@ -159,7 +148,7 @@ const Forms = () => {
       document.body.appendChild(link);
       link.click();
       toast.success('CSV Exported');
-    } catch (err) {
+    } catch {
       toast.error('Export Failed');
     }
   };
@@ -200,12 +189,12 @@ const Forms = () => {
             />
           </div>
           {!isSuperAdmin && (
-            <div className="flex gap-2">
+            <div className="flex gap-1 sm:gap-2 overflow-x-auto pb-1 scrollbar-hide">
               {['all', 'DRAFT', 'SUBMITTED', 'SCHEDULED', 'COMPLETED', 'CANCELLED'].map(status => (
                 <button
                   key={status}
                   onClick={() => setStatusFilter(status)}
-                  className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${
+                  className={`px-2 sm:px-3 py-1 rounded-full text-[9px] sm:text-[10px] font-bold uppercase whitespace-nowrap ${
                     statusFilter === status 
                       ? 'bg-slate-900 text-white' 
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -219,16 +208,16 @@ const Forms = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full text-left min-w-[640px]">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">Order</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">Date</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">Customer</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase">Services</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-right">Amount</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Status</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-slate-500 uppercase text-center">Actions</th>
+                <th className="px-2 sm:px-4 py-3 text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase">Order</th>
+                <th className="px-2 sm:px-4 py-3 text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase hidden sm:table-cell">Date</th>
+                <th className="px-2 sm:px-4 py-3 text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase">Customer</th>
+                <th className="px-2 sm:px-4 py-3 text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase hidden md:table-cell">Services</th>
+                <th className="px-2 sm:px-4 py-3 text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase text-right">Amount</th>
+                <th className="px-2 sm:px-4 py-3 text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase text-center">Status</th>
+                <th className="px-2 sm:px-4 py-3 text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -241,27 +230,27 @@ const Forms = () => {
                   const actions = getStatusActions(form);
                   return (
                     <tr key={form._id} className="hover:bg-slate-50/50">
-                      <td className="px-4 py-3">
+                      <td className="px-2 sm:px-4 py-3">
                         <div className="text-xs font-bold text-slate-900">{form.orderNo || 'N/A'}</div>
-                        {!isSuperAdmin && <div className="text-[9px] text-slate-400">{form.branchId?.branchName || 'N/A'}</div>}
+                        <div className="text-[9px] text-slate-400">{form.branchId?.branchName || 'N/A'}</div>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="text-xs font-medium text-slate-600">
+                      <td className="px-2 sm:px-4 py-3 hidden sm:table-cell">
+                        <div className="text-[10px] sm:text-xs font-medium text-slate-600">
                           {new Date(form.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="text-xs font-bold text-slate-900">{form.customer?.name || 'N/A'}</div>
+                      <td className="px-2 sm:px-4 py-3">
+                        <div className="text-xs font-bold text-slate-900 truncate max-w-[100px] sm:max-w-none">{form.customer?.name || 'N/A'}</div>
                         <div className="text-[9px] text-slate-400">{form.customer?.phone}</div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-2 sm:px-4 py-3 hidden md:table-cell">
                         <div className="text-[10px] text-slate-600">{form.serviceCategory}</div>
                         <div className="text-[9px] text-slate-400">
                           {form.amcServices?.slice(0, 2).join(', ')}
                           {form.amcServices?.length > 2 && ` +${form.amcServices.length - 2}`}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-2 sm:px-4 py-3 text-right">
                         <div className="text-xs font-bold text-slate-900">
                           ₹{(form.billing?.total || 0).toLocaleString('en-IN')}
                         </div>
@@ -269,41 +258,41 @@ const Forms = () => {
                           <div className="text-[9px] text-red-500">Due: ₹{form.billing.due.toLocaleString('en-IN')}</div>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`inline-block px-2 py-1 rounded-full text-[9px] font-bold uppercase border ${getStatusColor(form.status)}`}>
+                      <td className="px-2 sm:px-4 py-3 text-center">
+                        <span className={`inline-block px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-[9px] font-bold uppercase border ${getStatusColor(form.status)}`}>
                           {form.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-center gap-2">
+                      <td className="px-2 sm:px-4 py-3">
+                        <div className="flex items-center justify-center gap-1 sm:gap-2 flex-wrap">
                           <button 
                             onClick={() => navigate(`/forms/${form._id}`)}
-                            className="px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 flex items-center gap-1"
+                            className="px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 flex items-center gap-1"
                             title="View Details"
                           >
-                            <Eye size={12} />
-                            View
+                            <Eye size={10} className="sm:w-3 sm:h-3" />
+                            <span className="hidden sm:inline">View</span>
                           </button>
                           <button 
                             onClick={() => handleDownloadPdf(form._id, form.orderNo)}
-                            className="px-3 py-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200 flex items-center gap-1"
+                            className="px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200 flex items-center gap-1"
                             title="Download PDF"
                           >
-                            <Download size={12} />
-                            PDF
+                            <Download size={10} className="sm:w-3 sm:h-3" />
+                            <span className="hidden sm:inline">PDF</span>
                           </button>
                           {(form.schedule?.scheduledDates?.length > 0) && (
                             <div className="relative inline-block">
                               <button 
                                 onClick={() => setShowServicePdfMenu(showServicePdfMenu === form._id ? null : form._id)}
-                                className="px-3 py-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200 flex items-center gap-1"
+                                className="px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200 flex items-center gap-1"
                               >
-                                <FileCheck size={12} />
-                                Services
-                                <ChevronDown size={10} />
+                                <FileCheck size={10} className="sm:w-3 sm:h-3" />
+                                <span className="hidden sm:inline">Services</span>
+                                <ChevronDown size={8} className="sm:w-2.5 sm:h-2.5" />
                               </button>
                               {showServicePdfMenu === form._id && (
-                                <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 py-1 w-52 max-h-60 overflow-y-auto">
+                                <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 py-1 w-44 sm:w-52 max-h-60 overflow-y-auto">
                                   <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase border-b border-slate-100">
                                     Service PDFs ({form.schedule.scheduledDates.length})
                                   </div>
@@ -330,7 +319,7 @@ const Forms = () => {
                               <button 
                                 key={action.status}
                                 onClick={() => handleStatusChange(form, action.status)}
-                                className={`px-3 py-1.5 text-xs font-semibold rounded-lg text-white flex items-center gap-1 ${
+                                className={`px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-semibold rounded-lg text-white flex items-center gap-1 ${
                                   action.color === 'blue' ? 'bg-blue-500 hover:bg-blue-600' :
                                   action.color === 'amber' ? 'bg-amber-500 hover:bg-amber-600' :
                                   action.color === 'emerald' ? 'bg-emerald-500 hover:bg-emerald-600' :
@@ -338,8 +327,8 @@ const Forms = () => {
                                 }`}
                                 title={action.label}
                               >
-                                <Icon size={12} />
-                                {action.label}
+                                <Icon size={10} className="sm:w-3 sm:h-3" />
+                                <span className="hidden sm:inline">{action.label}</span>
                               </button>
                             );
                           })}

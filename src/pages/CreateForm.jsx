@@ -87,7 +87,7 @@ const CreateForm = () => {
       warranty: ''
     },
     amcServices: [],
-    premises: { type: '', floors: [{ id: Date.now(), label: 'Floor 1', length: 0, width: 0, area: 0 }], totalArea: 0 },
+    premises: { type: '', floors: [{ id: 1, label: 'Floor 1', length: 0, width: 0, area: 0 }], totalArea: 0 },
     ratePerSqft: 0,
     perFloorExtra: 0,
     pricing: { baseAmount: 0, gstPercent: 18, gstAmount: 0, discountPercent: 0, discountAmount: 0, finalAmount: 0 },
@@ -101,12 +101,12 @@ const CreateForm = () => {
 
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
-  const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [rateLoadingForm, setIsRateLoadingForm] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [isLoadingForm, setIsLoadingForm] = useState(false);
   const sigPadRefEmp = useRef(null);
   const sigPadRefCust = useRef(null);
-  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (user?.role !== 'super_admin' && user?.branchId) {
@@ -133,7 +133,7 @@ const CreateForm = () => {
     enabled: customerSearch.length >= 2
   });
 
-  const { data: rateData } = useQuery({
+  const { data: rateData, isLoading: rateLoading } = useQuery({
     queryKey: ['serviceRates', formData.serviceCategory, formData.branchId],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -142,7 +142,7 @@ const CreateForm = () => {
       const res = await api.get(`/service-rates?${params.toString()}`);
       return res.data.data;
     },
-    enabled: !!formData.serviceCategory && !!formData.branchId
+    enabled: !!formData.serviceCategory
   });
 
   useEffect(() => {
@@ -152,20 +152,6 @@ const CreateForm = () => {
       setServiceRates(ratesMap);
     }
   }, [rateData]);
-
-  // Recalculate pricing when serviceRates are loaded
-  useEffect(() => {
-    if (Object.keys(serviceRates).length > 0) {
-      calculatePricing();
-    }
-  }, [serviceRates]);
-
-  const getAutoRate = () => {
-    if (formData.amcServices.length > 0 && Object.keys(serviceRates).length > 0) {
-      return formData.amcServices.reduce((sum, service) => sum + (serviceRates[service] || 0), 0);
-    }
-    return 0;
-  };
 
   // AMC Floor-wise calculation
   const getAMCFloorBreakdown = () => {
@@ -198,8 +184,6 @@ const CreateForm = () => {
   const pestOptions = ['Cockroaches', 'Ants', 'Spider', 'Mosquito', 'Flies', 'Lizard', 'Rodent', 'Vector', 'Bed Bugs', 'Wood Borer', 'Fumigation', 'Others'];
   const serviceOptions = ['Residential', 'Commercial', 'Industrial'];
   const referenceOptions = ['Company', 'Social Media', 'Website', 'Walk-in', 'Referral', 'Google', 'Facebook', 'Justdial', 'Other'];
-  const scheduleOptions = ['One Time', 'Monthly', 'Yearly'];
-  const pMethodOptions = ['Drill', 'Fill', 'Seal'];
   const paymentModes = ['Cash', 'Cheque', 'NEFT', 'Online', 'Wallet', 'Pending'];
   const premisesTypes = ['Bunglow', 'Flat', 'Building', 'Office', 'Factory', 'Warehouse', 'Hotel', 'Restaurant', 'Hospital', 'School', 'Other'];
   const warrantyOptions = ['No Warranty', '1 Year', '2 Years', '5 Years', 'Lifetime'];
@@ -299,11 +283,12 @@ const CreateForm = () => {
     });
   };
 
-  // Calculate AMC fields based on servicesPerMonth and intervalDays
-  const calculateAMCFields = (servicesPerMonth, intervalDays) => {
-    const serviceCount = servicesPerMonth;
-    return { serviceCount, intervalDays };
-  };
+  // Recalculate pricing when serviceRates are loaded
+  useEffect(() => {
+    if (Object.keys(serviceRates).length > 0) {
+      calculatePricing();
+    }
+  }, [serviceRates]);
 
   // Generate AMC Schedule based on service count and interval
   const generateAMCSchedule = (startDate) => {
@@ -567,7 +552,7 @@ const CreateForm = () => {
     }
   };
 
-  if (isLoadingForm) {
+  if (rateLoadingForm) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
         <div className="text-center">
@@ -797,8 +782,9 @@ const CreateForm = () => {
 
         {(serviceType === 'AMC' || serviceType === 'GPC' || serviceType === 'BOTH') && (
           <SectionCard title={serviceType === 'GPC' ? "GPC Services - General Pest Control" : "AMC Services - Pest Control"} icon={serviceType === 'GPC' ? Bug : CheckSquare} headerBg={serviceType === 'GPC' ? "bg-gradient-to-r from-amber-600 to-amber-500" : "bg-gradient-to-r from-emerald-600 to-emerald-500"}>
-            {Object.keys(serviceRates).length === 0 && (
-              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-sm">
+            {(Object.keys(serviceRates).length === 0 || rateLoading) && (
+              <div className="flex items-center gap-2 mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-sm">
+                <div className="animate-spin h-4 w-4 border-2 border-amber-500 border-t-transparent rounded-full"></div>
                 Loading service rates...
               </div>
             )}
@@ -1117,10 +1103,13 @@ const CreateForm = () => {
             )}
 
             {/* Show message if AMC selected but no rates loaded */}
-            {(serviceType === 'AMC' || serviceType === 'GPC' || serviceType === 'BOTH') && formData.amcServices.length > 0 && Object.keys(serviceRates).length === 0 && (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-sm">
-                <p className="font-semibold">Loading service rates...</p>
-                <p>Service rates will appear shortly.</p>
+            {(serviceType === 'AMC' || serviceType === 'GPC' || serviceType === 'BOTH') && formData.amcServices.length > 0 && (Object.keys(serviceRates).length === 0 || rateLoading) && (
+              <div className="flex items-center gap-2 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-sm">
+                <div className="animate-spin h-4 w-4 border-2 border-amber-500 border-t-transparent rounded-full"></div>
+                <div>
+                  <p className="font-semibold">Loading service rates...</p>
+                  <p>Service rates will appear shortly.</p>
+                </div>
               </div>
             )}
 
@@ -1442,8 +1431,8 @@ const CreateForm = () => {
         </SectionCard>
 
         <div className="sticky bottom-6 z-10">
-          <button disabled={isLoading} type="submit" className="w-full py-5 bg-gradient-to-r from-brand-600 to-brand-500 text-white rounded-2xl font-bold text-base uppercase tracking-wider hover:from-brand-500 hover:to-brand-400 disabled:opacity-60 flex items-center justify-center gap-3 shadow-xl shadow-brand-500/30 transition-all">
-            {isLoading ? (
+          <button disabled={rateLoading} type="submit" className="w-full py-5 bg-gradient-to-r from-brand-600 to-brand-500 text-white rounded-2xl font-bold text-base uppercase tracking-wider hover:from-brand-500 hover:to-brand-400 disabled:opacity-60 flex items-center justify-center gap-3 shadow-xl shadow-brand-500/30 transition-all">
+            {rateLoading ? (
               <>
                 <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
                 Processing...

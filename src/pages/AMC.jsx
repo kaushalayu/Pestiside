@@ -5,12 +5,9 @@ import { FileText, Plus, Search, Calendar, IndianRupee, Edit2, Trash2, Eye, X, S
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 
-const fetchAMCs = async () => (await api.get('/amc')).data.data;
-
 const AMC = () => {
   const { user } = useSelector(state => state.auth);
   const isSuperAdmin = user?.role === 'super_admin';
-  const isAdmin = user?.role === 'super_admin' || user?.role === 'branch_admin';
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);

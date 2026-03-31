@@ -56,23 +56,41 @@ const Inventory = () => {
   const [requestNotes, setRequestNotes] = useState('');
 
   const [purchaseForm, setPurchaseForm] = useState({
-    chemicalId: '',
-    quantity: '',
-    unit: 'L',
-    purchaseRate: '',
-    purchaseDate: new Date().toISOString().split('T')[0],
+    items: [{ chemicalId: '', quantity: '', unit: 'L', rate: '' }],
     supplierName: '',
     supplierContact: '',
     invoiceNo: '',
     notes: ''
   });
 
-  const [transferForm, setTransferForm] = useState({
+  const [hqPurchases, setHqPurchases] = useState([]);
+  const [branchTransfers, setBranchTransfers] = useState([]);
+  const [distributions, setDistributions] = useState([]);
+  const [employeeInventory, setEmployeeInventory] = useState([]);
+  const [employeeUsageHistory, setEmployeeUsageHistory] = useState([]);
+  const [employeeUsageForm, setEmployeeUsageForm] = useState({
     chemicalId: '',
-    targetId: '',
-    targetType: isSuperAdmin ? 'Branch' : 'Employee',
     quantity: '',
-    unit: 'L',
+    unit: 'ML',
+    jobId: '',
+    jobName: '',
+    notes: '',
+    isReturned: false
+  });
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showDistributeModal, setShowDistributeModal] = useState(false);
+
+  const [transferForm, setTransferForm] = useState({
+    branchId: '',
+    items: [{ chemicalId: '', quantity: '', unit: 'L' }],
+    notes: '',
+    transferDate: new Date().toISOString().split('T')[0]
+  });
+
+  const [distributeForm, setDistributeForm] = useState({
+    employeeId: '',
+    items: [{ chemicalId: '', quantity: '', unit: 'L' }],
     notes: ''
   });
 
@@ -117,19 +135,32 @@ const Inventory = () => {
       ];
       
       if (isSuperAdmin) {
-        promises.push(api.get('/branches'));
-        promises.push(api.get('/employees'));
-        promises.push(api.get('/inventory/balances'));
-        promises.push(api.get('/purchase-requests'));
-        promises.push(api.get('/collections'));
-        promises.push(api.get('/stock-transfers/stats'));
+        promises.push(
+          api.get('/branches'),
+          api.get('/employees'),
+          api.get('/inventory/balances'),
+          api.get('/purchase-requests'),
+          api.get('/collections'),
+          api.get('/branch-transfers/stats'),
+          api.get('/hq-purchases'),
+          api.get('/branch-transfers')
+        );
       } else if (user.role === 'branch_admin' || user.role === 'office') {
-        promises.push(api.get('/employees'));
-        promises.push(api.get('/inventory/my-balance'));
-        promises.push(api.get('/purchase-requests/my-requests'));
-        promises.push(api.get('/collections'));
-        promises.push(api.get('/expenses'));
-        promises.push(api.get('/stock-transfers/stats'));
+        promises.push(
+          api.get('/employees'),
+          api.get('/inventory/my-balance'),
+          api.get('/purchase-requests/my-requests'),
+          api.get('/collections'),
+          api.get('/expenses'),
+          api.get('/branch-transfers/stats'),
+          api.get('/branch-transfers'),
+          api.get('/employee-distributions')
+        );
+      } else if (user.role === 'technician' || user.role === 'sales') {
+        promises.push(
+          api.get('/employee-inventory/my-inventory'),
+          api.get('/employee-inventory/usage-history')
+        );
       }
 
       const results = await Promise.allSettled(promises);
@@ -166,6 +197,8 @@ const Inventory = () => {
         if (results[8]?.status === 'fulfilled') setPurchaseRequests(results[8].value.data?.data || []);
         if (results[9]?.status === 'fulfilled') setCollections(results[9].value.data?.data?.data?.reduce((sum, c) => sum + (c.amount || 0), 0));
         if (results[10]?.status === 'fulfilled') setTransferStats(results[10].value.data?.data);
+        if (results[11]?.status === 'fulfilled') setHqPurchases(results[11].value.data?.data || []);
+        if (results[12]?.status === 'fulfilled') setBranchTransfers(results[12].value.data?.data || []);
       } else if (user.role === 'branch_admin' || user.role === 'office') {
         if (results[5]?.status === 'fulfilled') setBranchUsers(results[5].value.data?.data || []);
         if (results[6]?.status === 'fulfilled') setMyBalance(results[6].value.data?.data);
@@ -173,6 +206,11 @@ const Inventory = () => {
         if (results[8]?.status === 'fulfilled') setCollections(results[8].value.data?.data?.data?.reduce((sum, c) => sum + (c.amount || 0), 0));
         if (results[9]?.status === 'fulfilled') setTotalExpenses(results[9].value.data?.data?.data?.reduce((sum, e) => sum + (e.amount || 0), 0));
         if (results[10]?.status === 'fulfilled') setTransferStats(results[10].value.data?.data);
+        if (results[11]?.status === 'fulfilled') setBranchTransfers(results[11].value.data?.data || []);
+        if (results[12]?.status === 'fulfilled') setDistributions(results[12].value.data?.data || []);
+      } else if (user.role === 'technician' || user.role === 'sales') {
+        if (results[5]?.status === 'fulfilled') setEmployeeInventory(results[5].value.data?.data || []);
+        if (results[6]?.status === 'fulfilled') setEmployeeUsageHistory(results[6].value.data?.data || []);
       }
     } catch (error) {
       toast.error(error.response?.data?.message || 'Error loading data');
@@ -261,6 +299,90 @@ const Inventory = () => {
     }
   };
 
+  const handlePurchaseSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const validItems = purchaseForm.items.filter(item => item.chemicalId && item.quantity && item.rate);
+      if (validItems.length === 0) return toast.error('Add at least one item');
+      await api.post('/hq-purchases', purchaseForm);
+      toast.success('Purchase recorded successfully');
+      setShowPurchaseModal(false);
+      setPurchaseForm({
+        items: [{ chemicalId: '', quantity: '', unit: 'L', rate: '' }],
+        supplierName: '',
+        supplierContact: '',
+        invoiceNo: '',
+        notes: ''
+      });
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Error recording purchase');
+    }
+  };
+
+  const handleTransferSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const validItems = transferForm.items.filter(item => item.chemicalId && item.quantity);
+      if (validItems.length === 0 || !transferForm.branchId) {
+        return toast.error('Select branch and add items');
+      }
+      await api.post('/branch-transfers', transferForm);
+      toast.success('Transfer created - waiting for branch acceptance');
+      setShowTransferModal(false);
+      setTransferForm({
+        branchId: '',
+        items: [{ chemicalId: '', quantity: '', unit: 'L' }],
+        notes: '',
+        transferDate: new Date().toISOString().split('T')[0]
+      });
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Error creating transfer');
+    }
+  };
+
+  const handleDistributeSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const validItems = distributeForm.items.filter(item => item.chemicalId && item.quantity);
+      if (validItems.length === 0 || !distributeForm.employeeId) {
+        return toast.error('Select employee and add items');
+      }
+      await api.post('/employee-distributions', distributeForm);
+      toast.success('Stock distributed to employee');
+      setShowDistributeModal(false);
+      setDistributeForm({
+        employeeId: '',
+        items: [{ chemicalId: '', quantity: '', unit: 'L' }],
+        notes: ''
+      });
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Error distributing stock');
+    }
+  };
+
+  const handleApproveTransfer = async (transferId) => {
+    try {
+      await api.patch(`/branch-transfers/${transferId}/approve`);
+      toast.success('Transfer accepted - stock added to your branch');
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Error accepting transfer');
+    }
+  };
+
+  const handleRejectTransfer = async (transferId) => {
+    try {
+      await api.patch(`/branch-transfers/${transferId}/reject`);
+      toast.success('Transfer rejected');
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Error rejecting transfer');
+    }
+  };
+
   const handleUsage = async (e) => {
     e.preventDefault();
     try {
@@ -278,6 +400,48 @@ const Inventory = () => {
         notes: '',
         isReturned: false,
         returnTo: 'Branch'
+      });
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Error recording usage');
+    }
+  };
+
+  const handleEmployeeUsage = async (e) => {
+    e.preventDefault();
+    try {
+      if (!employeeUsageForm.chemicalId || !employeeUsageForm.quantity) {
+        return toast.error('Fill all required fields');
+      }
+      
+      if (employeeUsageForm.isReturned) {
+        await api.post('/employee-inventory/return', {
+          chemicalId: employeeUsageForm.chemicalId,
+          quantity: parseFloat(employeeUsageForm.quantity),
+          unit: employeeUsageForm.unit,
+          notes: employeeUsageForm.notes
+        });
+        toast.success('Stock returned successfully');
+      } else {
+        await api.post('/employee-inventory/use', {
+          chemicalId: employeeUsageForm.chemicalId,
+          quantity: parseFloat(employeeUsageForm.quantity),
+          unit: employeeUsageForm.unit,
+          jobId: employeeUsageForm.jobId,
+          jobName: employeeUsageForm.jobName,
+          notes: employeeUsageForm.notes
+        });
+        toast.success('Usage recorded successfully');
+      }
+      
+      setEmployeeUsageForm({
+        chemicalId: '',
+        quantity: '',
+        unit: 'ML',
+        jobId: '',
+        jobName: '',
+        notes: '',
+        isReturned: false
       });
       fetchData();
     } catch (error) {
@@ -427,7 +591,7 @@ const Inventory = () => {
             </div>
           </div>
           
-          <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+          <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm overflow-x-auto scrollbar-hide">
             {[
               { id: 'summary', label: 'Dashboard', icon: TrendingUp },
               ...(isSuperAdmin ? [
@@ -445,6 +609,11 @@ const Inventory = () => {
                 { id: 'transfer-requests', label: 'Stock Transfers', icon: ArrowRightLeft },
                 { id: 'accounts', label: 'Accounts', icon: DollarSign }
               ] : []),
+              ...(user.role === 'technician' || user.role === 'sales' ? [
+                { id: 'my-stock', label: 'My Stock', icon: Package },
+                { id: 'usage', label: 'Usage', icon: Clock },
+                { id: 'history', label: 'History', icon: History }
+              ] : []),
               { id: 'wallet', label: 'My Wallet', icon: Wallet },
               { id: 'usage', label: 'Usage', icon: Clock },
               { id: 'history', label: 'History', icon: History }
@@ -452,13 +621,13 @@ const Inventory = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-2 ${
+                className={`px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-1.5 sm:gap-2 ${
                   activeTab === tab.id 
                     ? 'bg-emerald-500 text-white shadow-md' 
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                <tab.icon size={14} /> {tab.label}
+                <tab.icon size={12} className="sm:w-[14px] sm:h-[14px]" /> <span className="hidden xs:inline">{tab.label}</span><span className="xs:hidden">{tab.label.slice(0, 4)}</span>
               </button>
             ))}
           </div>
@@ -472,8 +641,8 @@ const Inventory = () => {
             {isSuperAdmin && (
               <div className="space-y-4">
                 {/* New Card: Total Stock | Transferred | Paid | Remaining */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-5 rounded-2xl text-white shadow-xl">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                  <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
                     <div className="flex items-center gap-2 mb-2">
                       <Package size={16} />
                       <span className="text-[10px] font-semibold uppercase opacity-80">Total Stock</span>
@@ -483,29 +652,29 @@ const Inventory = () => {
                     </p>
                     <p className="text-[10px] opacity-60 mt-1">At HQ</p>
                   </div>
-                  <div className="bg-gradient-to-br from-purple-600 to-purple-700 p-5 rounded-2xl text-white shadow-xl">
+                  <div className="bg-gradient-to-br from-purple-600 to-purple-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
                     <div className="flex items-center gap-2 mb-2">
-                      <Send size={16} />
-                      <span className="text-[10px] font-semibold uppercase opacity-80">Transferred</span>
+                      <Send size={14} className="md:w-4 md:h-4" />
+                      <span className="text-[9px] md:text-[10px] font-semibold uppercase opacity-80">Transferred</span>
                     </div>
-                    <p className="text-2xl font-black">{formatCurrency(transferStats?.totalTransferredValue || branchBalances.reduce((a, b) => a + b.totalReceivedValue, 0))}</p>
-                    <p className="text-[10px] opacity-60 mt-1">To Branches</p>
+                    <p className="text-xl md:text-2xl font-black truncate">{formatCurrency(transferStats?.totalTransferredValue || branchBalances.reduce((a, b) => a + b.totalReceivedValue, 0))}</p>
+                    <p className="text-[9px] md:text-[10px] opacity-60 mt-1">To Branches</p>
                   </div>
-                  <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 p-5 rounded-2xl text-white shadow-xl">
+                  <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
                     <div className="flex items-center gap-2 mb-2">
-                      <CheckCircle size={16} />
-                      <span className="text-[10px] font-semibold uppercase opacity-80">Paid</span>
+                      <CheckCircle size={14} className="md:w-4 md:h-4" />
+                      <span className="text-[9px] md:text-[10px] font-semibold uppercase opacity-80">Paid</span>
                     </div>
-                    <p className="text-2xl font-black">{formatCurrency(transferStats?.totalPaid || branchBalances.reduce((a, b) => a + b.totalPaid, 0))}</p>
-                    <p className="text-[10px] opacity-60 mt-1">By Branches</p>
+                    <p className="text-xl md:text-2xl font-black truncate">{formatCurrency(transferStats?.totalPaid || branchBalances.reduce((a, b) => a + b.totalPaid, 0))}</p>
+                    <p className="text-[9px] md:text-[10px] opacity-60 mt-1">By Branches</p>
                   </div>
-                  <div className="bg-gradient-to-br from-amber-600 to-amber-700 p-5 rounded-2xl text-white shadow-xl">
+                  <div className="bg-gradient-to-br from-amber-600 to-amber-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
                     <div className="flex items-center gap-2 mb-2">
-                      <AlertCircle size={16} />
-                      <span className="text-[10px] font-semibold uppercase opacity-80">Remaining</span>
+                      <AlertCircle size={14} className="md:w-4 md:h-4" />
+                      <span className="text-[9px] md:text-[10px] font-semibold uppercase opacity-80">Remaining</span>
                     </div>
-                    <p className="text-2xl font-black">{formatCurrency(transferStats?.pendingBalance || branchBalances.reduce((a, b) => a + b.pendingBalance, 0))}</p>
-                    <p className="text-[10px] opacity-60 mt-1">Pending Payment</p>
+                    <p className="text-xl md:text-2xl font-black truncate">{formatCurrency(transferStats?.pendingBalance || branchBalances.reduce((a, b) => a + b.pendingBalance, 0))}</p>
+                    <p className="text-[9px] md:text-[10px] opacity-60 mt-1">Pending Payment</p>
                   </div>
                 </div>
 
@@ -532,6 +701,318 @@ const Inventory = () => {
 )}
             </div>
           )}
+          </div>
+        )}
+
+        {/* Purchase Tab */}
+        {activeTab === 'purchase' && isSuperAdmin && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold text-slate-800">HQ Purchases</h2>
+              <button onClick={() => setShowPurchaseModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2">
+                <ShoppingCart size={18} /> New Purchase
+              </button>
+            </div>
+            
+            <SectionCard title="Purchase History" icon={ShoppingCart} headerBg="bg-gradient-to-r from-blue-600 to-blue-500">
+              {hqPurchases.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-slate-50">
+                        <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Date</th>
+                        <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Supplier</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Items</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Total Qty</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Total Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {hqPurchases.map(purchase => (
+                        <tr key={purchase._id} className="border-b hover:bg-slate-50">
+                          <td className="py-3 px-4">{new Date(purchase.createdAt).toLocaleDateString()}</td>
+                          <td className="py-3 px-4 font-medium">{purchase.supplierName}</td>
+                          <td className="py-3 px-4 text-center">{purchase.items?.length || 0}</td>
+                          <td className="py-3 px-4 text-right font-bold">{purchase.totalQuantity} L</td>
+                          <td className="py-3 px-4 text-right font-bold text-green-600">₹{purchase.totalAmount?.toLocaleString('en-IN')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-slate-500">
+                  <ShoppingCart size={48} className="mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-semibold">No purchases yet</p>
+                  <p className="text-sm mt-2">Click "New Purchase" to buy chemicals from supplier</p>
+                </div>
+              )}
+            </SectionCard>
+
+            {/* Products List from HQ Stock */}
+            <SectionCard title="HQ Chemical Stock" icon={Beaker} headerBg="bg-gradient-to-r from-amber-600 to-amber-500">
+              {chemicals.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-slate-50">
+                        <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Name</th>
+                        <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Category</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Stock</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Cost Rate</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Transfer Rate (+10%)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {chemicals.map(chem => (
+                        <tr key={chem._id} className="border-b hover:bg-slate-50">
+                          <td className="py-3 px-4 font-bold">{chem.name}</td>
+                          <td className="py-3 px-4 text-slate-600">{chem.category}</td>
+                          <td className="py-3 px-4 text-right font-bold text-blue-600">{chem.mainStock || 0} {chem.unitSystem || 'L'}</td>
+                          <td className="py-3 px-4 text-right">₹{chem.purchasePrice || 0}</td>
+                          <td className="py-3 px-4 text-right font-bold text-green-600">₹{Math.round((chem.purchasePrice || 0) * 1.1 * 100) / 100}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-500">No chemicals in stock</div>
+              )}
+            </SectionCard>
+          </div>
+        )}
+
+        {/* Transfer Tab */}
+        {activeTab === 'transfer' && isSuperAdmin && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold text-slate-800">Transfer to Branches</h2>
+              <button onClick={() => setShowTransferModal(true)} className="bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2">
+                <ArrowRightLeft size={18} /> New Transfer
+              </button>
+            </div>
+
+            <SectionCard title="Transfer History" icon={ArrowRightLeft} headerBg="bg-gradient-to-r from-purple-600 to-purple-500">
+              {branchTransfers.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-slate-50">
+                        <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Date</th>
+                        <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Branch</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Qty</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Cost</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Transfer Value</th>
+                        <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {branchTransfers.map(transfer => (
+                        <tr key={transfer._id} className="border-b hover:bg-slate-50">
+                          <td className="py-3 px-4">{new Date(transfer.createdAt).toLocaleDateString()}</td>
+                          <td className="py-3 px-4 font-medium">{transfer.branchId?.branchName}</td>
+                          <td className="py-3 px-4 text-right">{transfer.totalQuantity} L</td>
+                          <td className="py-3 px-4 text-right">₹{transfer.totalCostValue?.toLocaleString('en-IN')}</td>
+                          <td className="py-3 px-4 text-right font-bold text-green-600">₹{transfer.totalTransferValue?.toLocaleString('en-IN')}</td>
+                          <td className="py-3 px-4 text-center">
+                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                              transfer.status === 'ACCEPTED' ? 'bg-green-100 text-green-700' :
+                              transfer.status === 'REJECTED' ? 'bg-red-100 text-red-700' :
+                              'bg-yellow-100 text-yellow-700'
+                            }`}>
+                              {transfer.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-slate-500">
+                  <ArrowRightLeft size={48} className="mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-semibold">No transfers yet</p>
+                  <p className="text-sm mt-2">Click "New Transfer" to send stock to branches</p>
+                </div>
+              )}
+            </SectionCard>
+          </div>
+        )}
+
+        {/* Distribute Tab (Branch Admin) */}
+        {activeTab === 'distribute' && user.role === 'branch_admin' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold text-slate-800">Distribute to Employees</h2>
+              <button onClick={() => setShowDistributeModal(true)} className="bg-orange-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2">
+                <Send size={18} /> Distribute Stock
+              </button>
+            </div>
+
+            {/* Pending Transfers from HQ */}
+            <SectionCard title="Pending Transfers from HQ" icon={Package} headerBg="bg-gradient-to-r from-yellow-600 to-yellow-500">
+              {branchTransfers.filter(t => t.status === 'PENDING').length > 0 ? (
+                <div className="space-y-4">
+                  {branchTransfers.filter(t => t.status === 'PENDING').map(transfer => (
+                    <div key={transfer._id} className="border rounded-lg p-4 bg-yellow-50">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-bold text-lg">From HQ - {transfer.branchId?.branchName || 'HQ'}</p>
+                          <p className="text-sm text-slate-600">
+                            {transfer.items?.length} items • {transfer.totalQuantity} L • 
+                            <span className="font-bold text-green-600 ml-1">₹{transfer.totalTransferValue?.toLocaleString('en-IN')}</span>
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => handleApproveTransfer(transfer._id)} className="bg-green-600 text-white px-3 py-1 rounded text-sm font-semibold">Accept</button>
+                          <button onClick={() => handleRejectTransfer(transfer._id)} className="bg-red-600 text-white px-3 py-1 rounded text-sm font-semibold">Reject</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-500">No pending transfers from HQ</div>
+              )}
+            </SectionCard>
+
+            <SectionCard title="Distribution History" icon={Send} headerBg="bg-gradient-to-r from-orange-600 to-orange-500">
+              {distributions.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-slate-50">
+                        <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Date</th>
+                        <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Employee</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Qty</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {distributions.map(dist => (
+                        <tr key={dist._id} className="border-b hover:bg-slate-50">
+                          <td className="py-3 px-4">{new Date(dist.createdAt).toLocaleDateString()}</td>
+                          <td className="py-3 px-4 font-medium">{dist.employeeId?.name}</td>
+                          <td className="py-3 px-4 text-right">{dist.totalQuantity} L</td>
+                          <td className="py-3 px-4 text-right font-bold">₹{dist.totalValue?.toLocaleString('en-IN')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-slate-500">
+                  <Send size={48} className="mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-semibold">No distributions yet</p>
+                </div>
+              )}
+            </SectionCard>
+          </div>
+        )}
+
+        {/* Products Tab */}
+        {activeTab === 'products' && isSuperAdmin && (
+          <div className="space-y-6">
+            <SectionCard title="Products / Chemicals" icon={Beaker} headerBg="bg-gradient-to-r from-amber-600 to-amber-500">
+              {chemicals.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-slate-50">
+                        <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Name</th>
+                        <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Category</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Stock</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Unit</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Price</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {chemicals.map(chem => (
+                        <tr key={chem._id} className="border-b hover:bg-slate-50">
+                          <td className="py-3 px-4 font-bold">{chem.name}</td>
+                          <td className="py-3 px-4 text-slate-600">{chem.category}</td>
+                          <td className="py-3 px-4 text-right font-bold">{chem.mainStock || 0}</td>
+                          <td className="py-3 px-4 text-right">{chem.unit}</td>
+                          <td className="py-3 px-4 text-right">₹{chem.purchasePrice || 0}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-slate-500">
+                  <Beaker size={48} className="mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-semibold">No Products Found</p>
+                  <p className="text-sm mt-2">Add chemicals from the form below</p>
+                </div>
+              )}
+            </SectionCard>
+          </div>
+        )}
+
+        {/* Requests Tab */}
+        {activeTab === 'requests' && isSuperAdmin && (
+          <div className="space-y-6">
+            <SectionCard title="Purchase Requests" icon={FileText} headerBg="bg-gradient-to-r from-cyan-600 to-cyan-500">
+              <div className="text-center py-12 text-slate-500">
+                <FileText size={48} className="mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-semibold">Purchase Requests</p>
+                <p className="text-sm mt-2">No pending requests</p>
+              </div>
+            </SectionCard>
+          </div>
+        )}
+
+        {/* Accounts Tab */}
+        {activeTab === 'accounts' && (
+          <div className="space-y-6">
+            <SectionCard title="Branch Accounts" icon={DollarSign} headerBg="bg-gradient-to-r from-rose-600 to-rose-500">
+              <div className="text-center py-12 text-slate-500">
+                <DollarSign size={48} className="mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-semibold">Branch Accounts</p>
+                <p className="text-sm mt-2">Account details will appear here</p>
+              </div>
+            </SectionCard>
+          </div>
+        )}
+
+        {/* Payments Tab */}
+        {activeTab === 'payments' && isSuperAdmin && (
+          <div className="space-y-6">
+            <SectionCard title="Payments" icon={CreditCard} headerBg="bg-gradient-to-r from-indigo-600 to-indigo-500">
+              <div className="text-center py-12 text-slate-500">
+                <CreditCard size={48} className="mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-semibold">Payment History</p>
+                <p className="text-sm mt-2">No payment records found</p>
+              </div>
+            </SectionCard>
+          </div>
+        )}
+
+        {/* Distribute Tab (Branch Admin) */}
+        {activeTab === 'distribute' && user.role === 'branch_admin' && (
+          <div className="space-y-6">
+            <SectionCard title="Distribute Stock" icon={Send} headerBg="bg-gradient-to-r from-orange-600 to-orange-500">
+              <div className="text-center py-12 text-slate-500">
+                <Send size={48} className="mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-semibold">Distribute Stock</p>
+                <p className="text-sm mt-2">Distribute chemicals to employees</p>
+              </div>
+            </SectionCard>
+          </div>
+        )}
+
+        {/* History Tab */}
+        {activeTab === 'history' && (
+          <div className="space-y-6">
+            <SectionCard title="Transaction History" icon={History} headerBg="bg-gradient-to-r from-slate-600 to-slate-500">
+              <div className="text-center py-12 text-slate-500">
+                <History size={48} className="mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-semibold">Transaction History</p>
+                <p className="text-sm mt-2">No transaction history available</p>
+              </div>
+            </SectionCard>
           </div>
         )}
 
@@ -618,38 +1099,38 @@ const Inventory = () => {
             <SectionCard title="My Chemical Wallet" icon={Wallet} headerBg="bg-gradient-to-r from-emerald-600 to-emerald-500">
               {myWallet ? (
                 <>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div className="bg-emerald-50 p-4 rounded-xl text-center border border-emerald-100">
-                      <p className="text-xs text-emerald-600 font-medium uppercase">Total Items</p>
-                      <p className="text-3xl font-black text-emerald-700">{myWallet.totalItems}</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6">
+                    <div className="bg-emerald-50 p-3 md:p-4 rounded-xl text-center border border-emerald-100">
+                      <p className="text-[10px] md:text-xs text-emerald-600 font-medium uppercase">Items</p>
+                      <p className="text-2xl md:text-3xl font-black text-emerald-700">{myWallet.totalItems}</p>
                     </div>
                     {isAdmin && (
-                      <div className="bg-blue-50 p-4 rounded-xl text-center border border-blue-100">
-                        <p className="text-xs text-blue-600 font-medium uppercase">Total Value</p>
-                        <p className="text-3xl font-black text-blue-700">{formatCurrency(myWallet.totalValue)}</p>
+                      <div className="bg-blue-50 p-3 md:p-4 rounded-xl text-center border border-blue-100">
+                        <p className="text-[10px] md:text-xs text-blue-600 font-medium uppercase">Value</p>
+                        <p className="text-xl md:text-2xl font-black text-blue-700 truncate">{formatCurrency(myWallet.totalValue)}</p>
                       </div>
                     )}
-                    <div className="bg-amber-50 p-4 rounded-xl text-center border border-amber-100">
-                      <p className="text-xs text-amber-600 font-medium uppercase">Used</p>
-                      <p className="text-3xl font-black text-amber-700">{myWallet.items?.reduce((sum, i) => sum + (i.usedQuantity || 0), 0)} L</p>
+                    <div className="bg-amber-50 p-3 md:p-4 rounded-xl text-center border border-amber-100 col-span-2 md:col-span-1">
+                      <p className="text-[10px] md:text-xs text-amber-600 font-medium uppercase">Used</p>
+                      <p className="text-2xl md:text-3xl font-black text-amber-700">{myWallet.items?.reduce((sum, i) => sum + (i.usedQuantity || 0), 0)} L</p>
                     </div>
                   </div>
 
                   <div className="space-y-3">
                     {myWallet.items?.map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
-                        <div className="flex items-center gap-4">
-                          <div className="p-3 bg-emerald-100 rounded-xl">
-                            <Beaker size={20} className="text-emerald-600" />
+                      <div key={idx} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 md:p-4 bg-slate-50 rounded-xl border border-slate-100 gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 md:p-3 bg-emerald-100 rounded-xl">
+                            <Beaker size={16} className="md:w-5 md:h-5 text-emerald-600" />
                           </div>
                           <div>
-                            <p className="font-bold text-slate-800">{item.chemicalName}</p>
-                            {isAdmin && <p className="text-xs text-slate-500">Rate: {formatCurrency(item.transferRate)}/{item.displayUnit}</p>}
+                            <p className="font-bold text-slate-800 text-sm md:text-base">{item.chemicalName}</p>
+                            {isAdmin && <p className="text-[10px] md:text-xs text-slate-500">Rate: {formatCurrency(item.transferRate)}/{item.displayUnit}</p>}
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-2xl font-black text-emerald-600">{item.displayQuantity} <span className="text-sm font-medium text-slate-500">{item.displayUnit}</span></p>
-                          <p className="text-xs text-slate-500">Used: {item.usedQuantity || 0} {item.displayUnit}</p>
+                          <p className="text-xl md:text-2xl font-black text-emerald-600">{item.displayQuantity} <span className="text-sm font-medium text-slate-500">{item.displayUnit}</span></p>
+                          <p className="text-[10px] md:text-xs text-slate-500">Used: {item.usedQuantity || 0} {item.displayUnit}</p>
                         </div>
                       </div>
                     ))}
@@ -667,6 +1148,182 @@ const Inventory = () => {
                   <p>Loading wallet...</p>
                 </div>
               )}
+            </SectionCard>
+          </div>
+        )}
+
+        {activeTab === 'my-stock' && (user.role === 'technician' || user.role === 'sales') && (
+          <div className="space-y-6">
+            <SectionCard title="My Chemical Stock" icon={Package} headerBg="bg-gradient-to-r from-blue-600 to-blue-500">
+              {employeeInventory.length > 0 ? (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6">
+                    <div className="bg-blue-50 p-3 md:p-4 rounded-xl text-center border border-blue-100">
+                      <p className="text-[10px] md:text-xs text-blue-600 font-medium uppercase">Items</p>
+                      <p className="text-2xl md:text-3xl font-black text-blue-700">{employeeInventory.length}</p>
+                    </div>
+                    <div className="bg-emerald-50 p-3 md:p-4 rounded-xl text-center border border-emerald-100">
+                      <p className="text-[10px] md:text-xs text-emerald-600 font-medium uppercase">Total Qty</p>
+                      <p className="text-xl md:text-2xl font-black text-emerald-700">
+                        {employeeInventory.reduce((sum, i) => sum + i.currentStock, 0)} L
+                      </p>
+                    </div>
+                    <div className="bg-amber-50 p-3 md:p-4 rounded-xl text-center border border-amber-100 col-span-2 md:col-span-1">
+                      <p className="text-[10px] md:text-xs text-amber-600 font-medium uppercase">Used</p>
+                      <p className="text-xl md:text-2xl font-black text-amber-700">
+                        {employeeInventory.reduce((sum, i) => sum + (i.totalReturned || 0), 0)} L
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {employeeInventory.map((item, idx) => (
+                      <div key={idx} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 md:p-4 bg-slate-50 rounded-xl border border-slate-100 gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 md:p-3 bg-blue-100 rounded-xl">
+                            <Beaker size={16} className="md:w-5 md:h-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-800 text-sm md:text-base">{item.chemicalName}</p>
+                            <p className="text-[10px] md:text-xs text-slate-500">{item.category} • {item.unit}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xl md:text-2xl font-black text-blue-600">{item.currentStock} <span className="text-sm font-medium text-slate-500">{item.unit}</span></p>
+                          <p className="text-[10px] md:text-xs text-slate-500">
+                            Rec: {item.totalReceived} | Ret: {item.totalReturned || 0}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-12 text-slate-400">
+                  <Package size={48} className="mx-auto mb-3 opacity-30" />
+                  <p>No chemicals assigned to you yet</p>
+                </div>
+              )}
+            </SectionCard>
+
+            <SectionCard title="Record Usage / Return" icon={Clock} headerBg="bg-gradient-to-r from-amber-600 to-amber-500">
+              <form onSubmit={handleEmployeeUsage} className="space-y-5">
+                <div>
+                  <label className="text-sm font-semibold text-slate-700 block mb-2">Chemical *</label>
+                  <select 
+                    required 
+                    value={employeeUsageForm.chemicalId} 
+                    onChange={e => setEmployeeUsageForm({...employeeUsageForm, chemicalId: e.target.value})}
+                    className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none"
+                  >
+                    <option value="">Select from your stock</option>
+                    {employeeInventory.map(item => (
+                      <option key={item.chemicalId} value={item.chemicalId}>
+                        {item.chemicalName} (Available: {item.currentStock} {item.unit})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 block mb-2">Quantity *</label>
+                    <input 
+                      type="number" 
+                      required 
+                      value={employeeUsageForm.quantity} 
+                      onChange={e => setEmployeeUsageForm({...employeeUsageForm, quantity: e.target.value})}
+                      className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none" 
+                      placeholder="50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 block mb-2">Unit</label>
+                    <select 
+                      value={employeeUsageForm.unit} 
+                      onChange={e => setEmployeeUsageForm({...employeeUsageForm, unit: e.target.value})}
+                      className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none"
+                    >
+                      <option value="ML">Milliliters (ML)</option>
+                      <option value="L">Liters (L)</option>
+                      <option value="KG">Kilograms (KG)</option>
+                      <option value="G">Grams (G)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-slate-700 block mb-2">Type</label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="usageType" 
+                        checked={!employeeUsageForm.isReturned}
+                        onChange={() => setEmployeeUsageForm({...employeeUsageForm, isReturned: false})}
+                        className="w-4 h-4 text-red-600"
+                      />
+                      <span className="text-sm font-medium text-slate-700">Use for Job</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="usageType" 
+                        checked={employeeUsageForm.isReturned}
+                        onChange={() => setEmployeeUsageForm({...employeeUsageForm, isReturned: true})}
+                        className="w-4 h-4 text-emerald-600"
+                      />
+                      <span className="text-sm font-medium text-slate-700">Return to Branch</span>
+                    </label>
+                  </div>
+                </div>
+
+                {!employeeUsageForm.isReturned && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-semibold text-slate-700 block mb-2">Job ID (Optional)</label>
+                      <input 
+                        type="text" 
+                        value={employeeUsageForm.jobId} 
+                        onChange={e => setEmployeeUsageForm({...employeeUsageForm, jobId: e.target.value})}
+                        className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none" 
+                        placeholder="Job ID"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold text-slate-700 block mb-2">Job Name (Optional)</label>
+                      <input 
+                        type="text" 
+                        value={employeeUsageForm.jobName} 
+                        onChange={e => setEmployeeUsageForm({...employeeUsageForm, jobName: e.target.value})}
+                        className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none" 
+                        placeholder="Job Name"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-sm font-semibold text-slate-700 block mb-2">Notes</label>
+                  <textarea 
+                    value={employeeUsageForm.notes} 
+                    onChange={e => setEmployeeUsageForm({...employeeUsageForm, notes: e.target.value})}
+                    className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none resize-none" 
+                    rows="2"
+                  />
+                </div>
+
+                <button 
+                  type="submit" 
+                  className={`w-full py-4 rounded-xl font-bold text-sm uppercase tracking-wider shadow-lg transition-all ${
+                    employeeUsageForm.isReturned 
+                      ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white hover:from-emerald-500 hover:to-emerald-400 shadow-emerald-500/30'
+                      : 'bg-gradient-to-r from-red-600 to-red-500 text-white hover:from-red-500 hover:to-red-400 shadow-red-500/30'
+                  }`}
+                >
+                  {employeeUsageForm.isReturned ? <RotateCcw size={18} className="inline mr-2" /> : <AlertCircle size={18} className="inline mr-2" />}
+                  {employeeUsageForm.isReturned ? 'Return Stock' : 'Use for Job'}
+                </button>
+              </form>
             </SectionCard>
           </div>
         )}
@@ -966,38 +1623,38 @@ const Inventory = () => {
         {activeTab === 'purchase-request' && user.role === 'branch_admin' && (
           <div className="space-y-6">
             {/* Financial Dashboard */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-gradient-to-br from-red-600 to-red-700 p-5 rounded-2xl text-white shadow-xl">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+              <div className="bg-gradient-to-br from-red-600 to-red-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
                 <div className="flex items-center gap-2 mb-2">
-                  <AlertCircle size={16} />
-                  <span className="text-[10px] font-semibold uppercase opacity-80">Pending to HQ</span>
+                  <AlertCircle size={14} className="md:w-4 md:h-4" />
+                  <span className="text-[9px] md:text-[10px] font-semibold uppercase opacity-80 truncate">Pending HQ</span>
                 </div>
-                <p className="text-2xl font-black">{formatCurrency(myBalance?.pendingBalance || 0)}</p>
-                <p className="text-[10px] opacity-60 mt-1">Pay to Super Admin</p>
+                <p className="text-lg md:text-2xl font-black truncate">{formatCurrency(myBalance?.pendingBalance || 0)}</p>
+                <p className="text-[9px] md:text-[10px] opacity-60 mt-1 hidden sm:block">Pay to Super Admin</p>
               </div>
-              <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 p-5 rounded-2xl text-white shadow-xl">
+              <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
                 <div className="flex items-center gap-2 mb-2">
-                  <CheckCircle size={16} />
-                  <span className="text-[10px] font-semibold uppercase opacity-80">Paid to HQ</span>
+                  <CheckCircle size={14} className="md:w-4 md:h-4" />
+                  <span className="text-[9px] md:text-[10px] font-semibold uppercase opacity-80 truncate">Paid HQ</span>
                 </div>
-                <p className="text-2xl font-black">{formatCurrency(myBalance?.totalPaid || 0)}</p>
-                <p className="text-[10px] opacity-60 mt-1">Total paid so far</p>
+                <p className="text-lg md:text-2xl font-black truncate">{formatCurrency(myBalance?.totalPaid || 0)}</p>
+                <p className="text-[9px] md:text-[10px] opacity-60 mt-1 hidden sm:block">Total paid so far</p>
               </div>
-              <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-5 rounded-2xl text-white shadow-xl">
+              <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
                 <div className="flex items-center gap-2 mb-2">
-                  <IndianRupee size={16} />
-                  <span className="text-[10px] font-semibold uppercase opacity-80">Collections</span>
+                  <IndianRupee size={14} className="md:w-4 md:h-4" />
+                  <span className="text-[9px] md:text-[10px] font-semibold uppercase opacity-80 truncate">Collections</span>
                 </div>
-                <p className="text-2xl font-black">{formatCurrency(collections || 0)}</p>
-                <p className="text-[10px] opacity-60 mt-1">From receipts</p>
+                <p className="text-lg md:text-2xl font-black truncate">{formatCurrency(collections || 0)}</p>
+                <p className="text-[9px] md:text-[10px] opacity-60 mt-1 hidden sm:block">From receipts</p>
               </div>
-              <div className="bg-gradient-to-br from-amber-600 to-amber-700 p-5 rounded-2xl text-white shadow-xl">
+              <div className="bg-gradient-to-br from-amber-600 to-amber-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
                 <div className="flex items-center gap-2 mb-2">
-                  <TrendingUp size={16} />
-                  <span className="text-[10px] font-semibold uppercase opacity-80">Net Balance</span>
+                  <TrendingUp size={14} className="md:w-4 md:h-4" />
+                  <span className="text-[9px] md:text-[10px] font-semibold uppercase opacity-80 truncate">Net Balance</span>
                 </div>
-                <p className="text-2xl font-black">{formatCurrency((collections || 0) - (totalExpenses || 0) - (myBalance?.pendingBalance || 0))}</p>
-                <p className="text-[10px] opacity-60 mt-1">Collections - Expenses - Pending</p>
+                <p className="text-lg md:text-2xl font-black truncate">{formatCurrency((collections || 0) - (totalExpenses || 0) - (myBalance?.pendingBalance || 0))}</p>
+                <p className="text-[9px] md:text-[10px] opacity-60 mt-1 hidden sm:block">Coll. - Exp. - Pend.</p>
               </div>
             </div>
 
@@ -1007,32 +1664,32 @@ const Inventory = () => {
                 <form onSubmit={handleCreatePurchaseRequest} className="space-y-4">
                   {requestItems.map((item, idx) => (
                     <div key={idx} className="grid grid-cols-12 gap-2 items-end">
-                      <div className="col-span-5">
+                      <div className="col-span-5 sm:col-span-6">
                         <label className="text-xs font-semibold text-slate-600 block mb-1">Chemical</label>
                         <select value={item.chemicalId} onChange={e => {
                           const newItems = [...requestItems];
                           newItems[idx].chemicalId = e.target.value;
                           setRequestItems(newItems);
-                        }} className="w-full bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm">
+                        }} className="w-full bg-white border border-slate-200 px-2 sm:px-3 py-2 rounded-lg text-xs sm:text-sm">
                           <option value="">Select</option>
                           {chemicals.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
                         </select>
                       </div>
-                      <div className="col-span-4">
-                        <label className="text-xs font-semibold text-slate-600 block mb-1">Quantity</label>
+                      <div className="col-span-4 sm:col-span-3">
+                        <label className="text-xs font-semibold text-slate-600 block mb-1">Qty</label>
                         <input type="number" value={item.quantity} onChange={e => {
                           const newItems = [...requestItems];
                           newItems[idx].quantity = e.target.value;
                           setRequestItems(newItems);
-                        }} className="w-full bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm" placeholder="100" />
+                        }} className="w-full bg-white border border-slate-200 px-2 sm:px-3 py-2 rounded-lg text-xs sm:text-sm" placeholder="100" />
                       </div>
                       <div className="col-span-2">
                         <select value={item.unit} onChange={e => {
                           const newItems = [...requestItems];
                           newItems[idx].unit = e.target.value;
                           setRequestItems(newItems);
-                        }} className="w-full bg-white border border-slate-200 px-3 py-2 rounded-lg text-sm">
-                          <option value="L">Liters</option>
+                        }} className="w-full bg-white border border-slate-200 px-2 sm:px-3 py-2 rounded-lg text-xs sm:text-sm">
+                          <option value="L">L</option>
                           <option value="ML">ML</option>
                           <option value="KG">KG</option>
                         </select>
@@ -1040,7 +1697,7 @@ const Inventory = () => {
                       <div className="col-span-1">
                         {requestItems.length > 1 && (
                           <button type="button" onClick={() => setRequestItems(requestItems.filter((_, i) => i !== idx))} className="w-full py-2 text-red-500 hover:bg-red-50 rounded-lg">
-                            <Trash2 size={16} />
+                            <Trash2 size={14} className="mx-auto" />
                           </button>
                         )}
                       </div>
@@ -1155,6 +1812,150 @@ const Inventory = () => {
         )}
 
       </div>
+
+      {/* Purchase Modal */}
+      {showPurchaseModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold">New HQ Purchase</h3>
+              <button onClick={() => setShowPurchaseModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+            <form onSubmit={handlePurchaseSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Supplier Name</label>
+                  <input type="text" value={purchaseForm.supplierName} onChange={e => setPurchaseForm({...purchaseForm, supplierName: e.target.value})} className="w-full p-3 border rounded-lg" placeholder="Enter supplier name" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Invoice No</label>
+                  <input type="text" value={purchaseForm.invoiceNo} onChange={e => setPurchaseForm({...purchaseForm, invoiceNo: e.target.value})} className="w-full p-3 border rounded-lg" placeholder="Invoice number" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Items</label>
+                {purchaseForm.items.map((item, idx) => (
+                  <div key={idx} className="flex gap-2 mb-2">
+                    <select value={item.chemicalId} onChange={e => {
+                      const newItems = [...purchaseForm.items];
+                      newItems[idx].chemicalId = e.target.value;
+                      setPurchaseForm({...purchaseForm, items: newItems});
+                    }} className="flex-1 p-2 border rounded-lg">
+                      <option value="">Select Chemical</option>
+                      {chemicals.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+                    </select>
+                    <input type="number" value={item.quantity} onChange={e => {
+                      const newItems = [...purchaseForm.items];
+                      newItems[idx].quantity = e.target.value;
+                      setPurchaseForm({...purchaseForm, items: newItems});
+                    }} className="w-20 p-2 border rounded-lg" placeholder="Qty" />
+                    <input type="number" value={item.rate} onChange={e => {
+                      const newItems = [...purchaseForm.items];
+                      newItems[idx].rate = e.target.value;
+                      setPurchaseForm({...purchaseForm, items: newItems});
+                    }} className="w-24 p-2 border rounded-lg" placeholder="Rate" />
+                    <button type="button" onClick={() => setPurchaseForm({...purchaseForm, items: purchaseForm.items.filter((_, i) => i !== idx)})} className="text-red-500 p-2">✕</button>
+                  </div>
+                ))}
+                <button type="button" onClick={() => setPurchaseForm({...purchaseForm, items: [...purchaseForm.items, { chemicalId: '', quantity: '', unit: 'L', rate: '' }]})} className="text-blue-600 text-sm font-semibold">+ Add Item</button>
+              </div>
+              <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold">Save Purchase</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Transfer Modal */}
+      {showTransferModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold">Transfer to Branch</h3>
+              <button onClick={() => setShowTransferModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+            <form onSubmit={handleTransferSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Select Branch</label>
+                <select value={transferForm.branchId} onChange={e => setTransferForm({...transferForm, branchId: e.target.value})} className="w-full p-3 border rounded-lg">
+                  <option value="">Select Branch</option>
+                  {branches?.map(b => <option key={b._id} value={b._id}>{b.branchName}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Items</label>
+                {transferForm.items.map((item, idx) => (
+                  <div key={idx} className="flex gap-2 mb-2">
+                    <select value={item.chemicalId} onChange={e => {
+                      const newItems = [...transferForm.items];
+                      newItems[idx].chemicalId = e.target.value;
+                      setTransferForm({...transferForm, items: newItems});
+                    }} className="flex-1 p-2 border rounded-lg">
+                      <option value="">Select Chemical</option>
+                      {chemicals.filter(c => (c.mainStock || 0) > 0).map(c => <option key={c._id} value={c._id}>{c.name} (Stock: {c.mainStock})</option>)}
+                    </select>
+                    <input type="number" value={item.quantity} onChange={e => {
+                      const newItems = [...transferForm.items];
+                      newItems[idx].quantity = e.target.value;
+                      setTransferForm({...transferForm, items: newItems});
+                    }} className="w-24 p-2 border rounded-lg" placeholder="Qty" />
+                    <button type="button" onClick={() => setTransferForm({...transferForm, items: transferForm.items.filter((_, i) => i !== idx)})} className="text-red-500 p-2">✕</button>
+                  </div>
+                ))}
+                <button type="button" onClick={() => setTransferForm({...transferForm, items: [...transferForm.items, { chemicalId: '', quantity: '', unit: 'L' }]})} className="text-blue-600 text-sm font-semibold">+ Add Item</button>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Notes</label>
+                <textarea value={transferForm.notes} onChange={e => setTransferForm({...transferForm, notes: e.target.value})} className="w-full p-3 border rounded-lg" rows="2" placeholder="Optional notes"></textarea>
+              </div>
+              <button type="submit" className="w-full bg-purple-600 text-white py-3 rounded-lg font-bold">Create Transfer</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Distribute Modal */}
+      {showDistributeModal && user.role === 'branch_admin' && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold">Distribute to Employee</h3>
+              <button onClick={() => setShowDistributeModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+            <form onSubmit={handleDistributeSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Select Employee</label>
+                <select value={distributeForm.employeeId} onChange={e => setDistributeForm({...distributeForm, employeeId: e.target.value})} className="w-full p-3 border rounded-lg">
+                  <option value="">Select Employee</option>
+                  {employees?.filter(e => e.role === 'technician' || e.role === 'sales').map(e => <option key={e._id} value={e._id}>{e.name} - {e.employeeId}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Items (from your branch stock)</label>
+                {distributeForm.items.map((item, idx) => (
+                  <div key={idx} className="flex gap-2 mb-2">
+                    <select value={item.chemicalId} onChange={e => {
+                      const newItems = [...distributeForm.items];
+                      newItems[idx].chemicalId = e.target.value;
+                      setDistributeForm({...distributeForm, items: newItems});
+                    }} className="flex-1 p-2 border rounded-lg">
+                      <option value="">Select Chemical</option>
+                      {inventory.filter(i => (i.quantity || 0) > 0).map(i => <option key={i._id} value={i.chemicalId?._id}>{i.chemicalId?.name} (Stock: {i.quantity})</option>)}
+                    </select>
+                    <input type="number" value={item.quantity} onChange={e => {
+                      const newItems = [...distributeForm.items];
+                      newItems[idx].quantity = e.target.value;
+                      setDistributeForm({...distributeForm, items: newItems});
+                    }} className="w-24 p-2 border rounded-lg" placeholder="Qty" />
+                    <button type="button" onClick={() => setDistributeForm({...distributeForm, items: distributeForm.items.filter((_, i) => i !== idx)})} className="text-red-500 p-2">✕</button>
+                  </div>
+                ))}
+                <button type="button" onClick={() => setDistributeForm({...distributeForm, items: [...distributeForm.items, { chemicalId: '', quantity: '', unit: 'L' }]})} className="text-blue-600 text-sm font-semibold">+ Add Item</button>
+              </div>
+              <button type="submit" className="w-full bg-orange-600 text-white py-3 rounded-lg font-bold">Distribute Stock</button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

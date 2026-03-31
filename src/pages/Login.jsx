@@ -22,7 +22,6 @@ const Login = () => {
     try {
       const response = await api.post('/auth/login', { email, password });
       
-      // Destructure successfully mapped properties from root payload
       const { user, accessToken } = response.data;
       dispatch(loginSuccess({ user, token: accessToken }));
       

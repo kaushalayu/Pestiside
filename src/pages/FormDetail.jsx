@@ -62,7 +62,7 @@ const CANCELLABLE_STATES = ['DRAFT', 'SUBMITTED', 'SCHEDULED'];
       });
       return response;
     },
-    onSuccess: (res) => {
+    onSuccess: () => {
       toast.success('Receipt generated and email sent!');
       setShowPaymentModal(false);
       setPaymentData({ advancePaid: '', paymentMode: 'CASH', transactionId: '', notes: '' });
@@ -70,8 +70,8 @@ const CANCELLABLE_STATES = ['DRAFT', 'SUBMITTED', 'SCHEDULED'];
       setScreenshotPreview(null);
       queryClient.invalidateQueries(['form', id]);
     },
-    onError: (err) => {
-      toast.error(err.response?.data?.message || 'Failed to generate receipt');
+    onError: (_err) => {
+      toast.error(_err.response?.data?.message || 'Failed to generate receipt');
     }
   });
 
@@ -102,21 +102,6 @@ const CANCELLABLE_STATES = ['DRAFT', 'SUBMITTED', 'SCHEDULED'];
     generateReceiptMutation.mutate({ ...paymentData, screenshot: paymentScreenshot });
   };
 
-  const downloadReceipt = async (receiptId, receiptNo) => {
-    try {
-      const response = await api.get(`/receipts/${receiptId}/pdf`, { responseType: 'blob' });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `Receipt_${receiptNo}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      toast.success('Receipt downloaded!');
-    } catch (err) {
-      toast.error('Failed to download receipt');
-    }
-  };
-
   const statusMutation = useMutation({
     mutationFn: async ({ status }) => {
       await api.patch(`/forms/${id}/status`, { status });
@@ -141,7 +126,7 @@ const CANCELLABLE_STATES = ['DRAFT', 'SUBMITTED', 'SCHEDULED'];
       document.body.appendChild(link);
       link.click();
       toast.success('PDF Generated');
-    } catch (err) {
+    } catch (_err) {
       console.error('PDF Error:', err);
       toast.error('PDF Generation Failed');
     }
