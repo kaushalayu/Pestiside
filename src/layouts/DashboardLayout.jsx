@@ -1,17 +1,81 @@
-import React, { useState } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { logout } from '../store/slices/authSlice';
+import api from '../lib/api';
+import toast from 'react-hot-toast';
 import { 
   LogOut, LayoutDashboard, ShieldCheck, Mail, Users, Building2, 
-  FileText, IndianRupee, Wallet, Package, Receipt, Menu, X, ChevronRight, Bell, Activity, BarChart3, Settings
+  FileText, IndianRupee, Wallet, Package, Receipt, Menu, X, ChevronRight, Bell, Activity, BarChart3, Settings, Check, Trash2, Truck, UserCheck, ListTodo
 } from 'lucide-react';
 
 const DashboardLayout = () => {
   const { user } = useSelector(state => state.auth);
   const location = useLocation();
   const dispatch = useDispatch();
+  const queryClient = useQueryClient();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notificationRef = useRef(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const { data: notificationsData } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      const res = await api.get('/notifications');
+      return res.data;
+    },
+    refetchInterval: 60000,
+  });
+
+  const notifications = notificationsData?.data || [];
+  const unreadCount = notificationsData?.unreadCount || 0;
+
+  const markAsReadMutation = useMutation({
+    mutationFn: (id) => api.patch(`/notifications/${id}/read`),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['notifications']);
+    },
+  });
+
+  const markAllReadMutation = useMutation({
+    mutationFn: () => api.patch('/notifications/read-all'),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['notifications']);
+      toast.success('All notifications marked as read');
+    },
+  });
+
+  const deleteNotificationMutation = useMutation({
+    mutationFn: (id) => api.delete(`/notifications/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['notifications']);
+    },
+  });
+
+  const getNotificationIcon = (type) => {
+    switch (type) {
+      case 'EXPENSE_APPROVED':
+      case 'RECEIPT_APPROVED':
+        return <Check size={16} className="text-emerald-500" />;
+      case 'EXPENSE_REJECTED':
+      case 'RECEIPT_REJECTED':
+        return <X size={16} className="text-red-500" />;
+      default:
+        return <Bell size={16} className="text-brand-500" />;
+    }
+  };
 
   const handleLogout = () => {
     dispatch(logout());
@@ -21,16 +85,21 @@ const DashboardLayout = () => {
     { to: '/', icon: <LayoutDashboard size={18} />, label: 'Dashboard', roles: ['super_admin', 'branch_admin', 'technician', 'sales', 'office'] },
     { to: '/branches', icon: <Building2 size={18} />, label: 'Branches', roles: ['super_admin'] },
     { to: '/customers', icon: <ShieldCheck size={18} />, label: 'Customers', roles: ['super_admin', 'branch_admin', 'technician', 'sales', 'office'] },
-    { to: '/amc', icon: <FileText size={18} />, label: 'AMC Contracts', roles: ['super_admin', 'branch_admin', 'office'] },
+    // AMC Contracts tab removed - using Booking Form directly
     { to: '/forms', icon: <FileText size={18} />, label: 'Booking Form', roles: ['super_admin', 'branch_admin', 'technician', 'sales', 'office'] },
     { to: '/employees', icon: <Users size={18} />, label: 'Employees', roles: ['super_admin', 'branch_admin', 'office'] },
     { to: '/enquiries', icon: <Mail size={18} />, label: 'Enquiries', roles: ['super_admin', 'branch_admin', 'office'] },
     { to: '/receipts', icon: <IndianRupee size={18} />, label: 'Receipts', roles: ['super_admin', 'branch_admin', 'technician', 'sales', 'office'] },
     { to: '/collections', icon: <Wallet size={18} />, label: 'Collections', roles: ['super_admin', 'branch_admin', 'office'] },
     { to: '/inventory', icon: <Package size={18} />, label: 'Inventory', roles: ['super_admin', 'branch_admin', 'technician'] },
+    { to: '/logistics', icon: <Truck size={18} />, label: 'Logistics', roles: ['technician', 'sales', 'super_admin', 'branch_admin'] },
     { to: '/expenses', icon: <Receipt size={18} />, label: 'Expenses', roles: ['super_admin', 'branch_admin', 'technician', 'office'] },
+    { to: '/hq-account', icon: <Wallet size={18} />, label: 'HQ Account', roles: ['super_admin'] },
+    { to: '/ledger', icon: <Receipt size={18} />, label: 'Ledger', roles: ['super_admin', 'branch_admin', 'technician', 'sales', 'office'] },
     { to: '/reports', icon: <BarChart3 size={18} />, label: 'Reports', roles: ['super_admin', 'branch_admin'] },
     { to: '/settings', icon: <ShieldCheck size={18} />, label: 'Settings', roles: ['super_admin', 'branch_admin'] },
+    { to: '/task-assignment', icon: <UserCheck size={18} />, label: 'Task Assignment', roles: ['super_admin', 'branch_admin'] },
+    { to: '/my-tasks', icon: <ListTodo size={18} />, label: 'My Tasks', roles: ['technician', 'sales'] },
   ];
 
   return (
@@ -120,10 +189,100 @@ const DashboardLayout = () => {
           </div>
           
           <div className="flex items-center gap-4">
-            <button className="relative p-2 text-slate-400 hover:bg-slate-50 rounded-lg transition-colors">
-               <Bell size={18} />
-               <span className="absolute top-2 right-2 w-2 h-2 bg-brand-500 rounded-full"></span>
-            </button>
+            <div className="relative" ref={notificationRef}>
+              <button 
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="relative p-2 text-slate-400 hover:bg-slate-50 rounded-lg transition-colors"
+              >
+                <Bell size={18} />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center shadow-lg">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
+              
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 z-50 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
+                    <h3 className="font-semibold text-slate-800 text-sm">Notifications</h3>
+                    {unreadCount > 0 && (
+                      <button 
+                        onClick={() => markAllReadMutation.mutate()}
+                        className="text-xs text-brand-600 hover:text-brand-700 font-medium"
+                      >
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-slate-400 text-sm">
+                        No notifications yet
+                      </div>
+                    ) : (
+                      notifications.slice(0, 10).map((notification) => (
+                          <div 
+                          key={notification._id}
+                          onClick={() => {
+                            if (!notification.isRead) {
+                              markAsReadMutation.mutate(notification._id);
+                            }
+                            if (notification.link) {
+                              navigate(notification.link);
+                              setShowNotifications(false);
+                            }
+                          }}
+                          className={`px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer ${!notification.isRead ? 'bg-brand-50/50' : ''}`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="mt-0.5">
+                              {getNotificationIcon(notification.type)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-slate-800 font-medium leading-tight">{notification.title}</p>
+                              <p className="text-xs text-slate-500 mt-1 line-clamp-2">{notification.message}</p>
+                              <p className="text-xs text-slate-400 mt-1">{new Date(notification.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {!notification.isRead && (
+                                <button 
+                                  onClick={() => markAsReadMutation.mutate(notification._id)}
+                                  className="p-1 text-slate-400 hover:text-brand-500 rounded"
+                                  title="Mark as read"
+                                >
+                                  <Check size={14} />
+                                </button>
+                              )}
+                              <button 
+                                onClick={() => deleteNotificationMutation.mutate(notification._id)}
+                                className="p-1 text-slate-400 hover:text-red-500 rounded"
+                                title="Delete"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  
+                  {notifications.length > 10 && (
+                    <div className="px-4 py-2 border-t border-slate-100 bg-slate-50 text-center">
+                      <Link 
+                        to="/notifications" 
+                        onClick={() => setShowNotifications(false)}
+                        className="text-xs text-brand-600 hover:text-brand-700 font-medium"
+                      >
+                        View all {notifications.length} notifications
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <div className="h-6 w-px bg-slate-200"></div>
             <div className="flex items-center gap-3">
                <div className="text-right hidden sm:block">

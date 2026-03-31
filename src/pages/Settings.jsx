@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
-import { Settings as SettingsIcon, Building2, Phone, Mail, MapPin, Save, User, Shield, Plus, Trash2, DollarSign } from 'lucide-react';
+import { Settings as SettingsIcon, Building2, Phone, Mail, MapPin, Save, User, Shield, Plus, Trash2, DollarSign, Edit2, X } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 
@@ -37,6 +37,7 @@ const Settings = () => {
   const [selectedBranch, setSelectedBranch] = useState(null);
 
   const [newRate, setNewRate] = useState({ serviceName: 'Cockroaches', category: 'Residential', price: '' });
+  const [editingRate, setEditingRate] = useState(null);
 
   const { data: ratesData, isLoading: ratesLoading } = useQuery({
     queryKey: ['serviceRatesAdmin'],
@@ -57,6 +58,16 @@ const Settings = () => {
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to add rate')
   });
 
+  const updateRateMutation = useMutation({
+    mutationFn: ({ id, data }) => api.put(`/service-rates/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['serviceRatesAdmin']);
+      setEditingRate(null);
+      toast.success('Rate updated');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to update rate')
+  });
+
   const deleteRateMutation = useMutation({
     mutationFn: (id) => api.delete(`/service-rates/${id}`),
     onSuccess: () => {
@@ -69,6 +80,14 @@ const Settings = () => {
   const handleAddRate = () => {
     if (!newRate.price) return toast.error('Please enter price');
     createRateMutation.mutate({ ...newRate, price: parseFloat(newRate.price) });
+  };
+
+  const handleUpdateRate = () => {
+    if (!editingRate.price) return toast.error('Please enter price');
+    updateRateMutation.mutate({ 
+      id: editingRate._id, 
+      data: { price: parseFloat(editingRate.price) } 
+    });
   };
 
   const updateMutation = useMutation({
@@ -286,17 +305,62 @@ const Settings = () => {
                     ) : (
                       ratesData?.map(rate => (
                         <tr key={rate._id} className="border-b border-slate-100">
-                          <td className="p-2">{rate.serviceName}</td>
-                          <td className="p-2">{rate.category}</td>
-                          <td className="p-2 text-right font-medium">₹{rate.price}</td>
-                          <td className="p-2 text-center">
-                            <button 
-                              onClick={() => deleteRateMutation.mutate(rate._id)}
-                              className="text-red-500 hover:text-red-700"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </td>
+                          {editingRate?._id === rate._id ? (
+                            <>
+                              <td className="p-2">{rate.serviceName}</td>
+                              <td className="p-2">{rate.category}</td>
+                              <td className="p-2">
+                                <div className="flex items-center gap-2 justify-end">
+                                  <span className="text-slate-400">₹</span>
+                                  <input 
+                                    type="number"
+                                    value={editingRate.price}
+                                    onChange={(e) => setEditingRate({...editingRate, price: e.target.value})}
+                                    className="border border-slate-200 rounded p-1 w-20 text-right"
+                                  />
+                                </div>
+                              </td>
+                              <td className="p-2 text-center">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button 
+                                    onClick={handleUpdateRate}
+                                    disabled={updateRateMutation.isPending}
+                                    className="text-emerald-600 hover:text-emerald-800"
+                                  >
+                                    <Save size={14} />
+                                  </button>
+                                  <button 
+                                    onClick={() => setEditingRate(null)}
+                                    className="text-slate-400 hover:text-slate-600"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td className="p-2">{rate.serviceName}</td>
+                              <td className="p-2">{rate.category}</td>
+                              <td className="p-2 text-right font-medium">₹{rate.price}</td>
+                              <td className="p-2 text-center">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button 
+                                    onClick={() => setEditingRate({...rate})}
+                                    className="text-blue-500 hover:text-blue-700"
+                                  >
+                                    <Edit2 size={14} />
+                                  </button>
+                                  <button 
+                                    onClick={() => deleteRateMutation.mutate(rate._id)}
+                                    className="text-red-500 hover:text-red-700"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            </>
+                          )}
                         </tr>
                       ))
                     )}

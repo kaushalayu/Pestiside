@@ -1,16 +1,17 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { 
   FileText, Download, ArrowLeft, User, Phone, 
   MapPin, ShieldCheck, PenTool, IndianRupee,
-  CheckCircle2, Clock, Calendar, Truck, Building2, Home
+  CheckCircle2, Clock, Calendar, Truck, Building2, Home, X, Receipt, Plus, Camera
 } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 
 const STATUS_OPTIONS = ['DRAFT', 'SUBMITTED', 'SCHEDULED', 'COMPLETED', 'CANCELLED'];
+const PAYMENT_MODES = ['CASH', 'UPI', 'NEFT', 'CHEQUE', 'ONLINE'];
 
 const STATUS_CONFIG = {
   DRAFT: { color: 'bg-slate-100 text-slate-600 border-slate-200', next: 'SUBMITTED', label: 'Draft' },
@@ -20,17 +21,101 @@ const STATUS_CONFIG = {
   CANCELLED: { color: 'bg-red-50 text-red-600 border-red-100', next: null, label: 'Cancelled' },
 };
 
-const FormDetail = () => {
+const CANCELLABLE_STATES = ['DRAFT', 'SUBMITTED', 'SCHEDULED'];
+
+  const FormDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useSelector(state => state.auth);
   const isFieldStaff = user?.role === 'technician' || user?.role === 'sales';
+  const isAdmin = user?.role === 'super_admin' || user?.role === 'branch_admin' || user?.role === 'office';
+
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentData, setPaymentData] = useState({
+    advancePaid: '',
+    paymentMode: 'CASH',
+    transactionId: '',
+    notes: ''
+  });
+  const [paymentScreenshot, setPaymentScreenshot] = useState(null);
+  const [screenshotPreview, setScreenshotPreview] = useState(null);
+  const screenshotRef = useRef(null);
 
   const { data: form, isLoading, error } = useQuery({
     queryKey: ['form', id],
     queryFn: async () => (await api.get(`/forms/${id}`)).data.data
   });
+
+  const generateReceiptMutation = useMutation({
+    mutationFn: async (data) => {
+      const formData = new FormData();
+      formData.append('advancePaid', data.advancePaid);
+      formData.append('paymentMode', data.paymentMode);
+      formData.append('transactionId', data.transactionId || '');
+      formData.append('notes', data.notes || '');
+      if (data.screenshot) {
+        formData.append('paymentScreenshot', data.screenshot);
+      }
+      const response = await api.post(`/receipts/from-form/${id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return response;
+    },
+    onSuccess: (res) => {
+      toast.success('Receipt generated and email sent!');
+      setShowPaymentModal(false);
+      setPaymentData({ advancePaid: '', paymentMode: 'CASH', transactionId: '', notes: '' });
+      setPaymentScreenshot(null);
+      setScreenshotPreview(null);
+      queryClient.invalidateQueries(['form', id]);
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Failed to generate receipt');
+    }
+  });
+
+  const handleScreenshotUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('File size should be less than 5MB');
+        return;
+      }
+      setPaymentScreenshot(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setScreenshotPreview(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveScreenshot = () => {
+    setPaymentScreenshot(null);
+    setScreenshotPreview(null);
+    if (screenshotRef.current) screenshotRef.current.value = '';
+  };
+
+  const handleGenerateReceipt = () => {
+    if (!paymentData.advancePaid || parseFloat(paymentData.advancePaid) <= 0) {
+      return toast.error('Enter valid amount');
+    }
+    generateReceiptMutation.mutate({ ...paymentData, screenshot: paymentScreenshot });
+  };
+
+  const downloadReceipt = async (receiptId, receiptNo) => {
+    try {
+      const response = await api.get(`/receipts/${receiptId}/pdf`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Receipt_${receiptNo}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      toast.success('Receipt downloaded!');
+    } catch (err) {
+      toast.error('Failed to download receipt');
+    }
+  };
 
   const statusMutation = useMutation({
     mutationFn: async ({ status }) => {
@@ -109,35 +194,57 @@ const FormDetail = () => {
            >
               <Download size={16} /> Download PDF
            </button>
+           {isAdmin && (
+             <>
+               {form?.status === 'COMPLETED' ? (
+                 <button 
+                    onClick={() => setShowPaymentModal(true)}
+                    className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-emerald-700 transition-all flex items-center gap-2"
+                 >
+                    <Receipt size={16} /> Generate Receipt
+                 </button>
+               ) : (
+                 <div className="px-6 py-3 bg-slate-100 text-slate-500 rounded-xl text-xs flex items-center gap-2">
+                   <Clock size={14} /> Receipt available after service completion
+                 </div>
+               )}
+             </>
+           )}
         </div>
       </div>
 
-      {/* Status Update */}
-      <div className="bg-slate-800 p-4 rounded-xl flex items-center gap-2 flex-wrap">
-         <span className="text-white text-xs font-bold uppercase mr-2">Update Status:</span>
-         {STATUS_OPTIONS.map(status => {
-           const info = STATUS_CONFIG[status];
-           const isCurrent = status === currentStatus;
-           const isNext = statusInfo.next === status;
-           
-           return (
-             <button
-               key={status}
-               disabled={statusMutation.isPending || isCurrent || (!isNext && status !== currentStatus)}
-               onClick={() => statusMutation.mutate({ status })}
-               className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${
-                 isCurrent 
-                   ? `${info.color} border-2 cursor-default` 
-                   : isNext 
-                     ? 'bg-emerald-500 text-white hover:bg-emerald-400' 
-                     : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-               }`}
-             >
-               {info.label}
-             </button>
-           );
-         })}
-      </div>
+      {/* Status Update - Only for Admin */}
+      {isAdmin && (
+        <div className="bg-slate-800 p-4 rounded-xl flex items-center gap-2 flex-wrap">
+           <span className="text-white text-xs font-bold uppercase mr-2">Update Status:</span>
+           {STATUS_OPTIONS.map(status => {
+             const info = STATUS_CONFIG[status];
+             const isCurrent = status === currentStatus;
+             const isNext = statusInfo.next === status;
+             const isCancellable = status === 'CANCELLED' && CANCELLABLE_STATES.includes(currentStatus);
+             const canChange = statusMutation.isPending || isCurrent || (!isNext && !isCancellable && status !== currentStatus);
+             
+             return (
+               <button
+                 key={status}
+                 disabled={canChange}
+                 onClick={() => statusMutation.mutate({ status })}
+                 className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${
+                   isCurrent 
+                     ? `${info.color} border-2 cursor-default` 
+                     : isNext || isCancellable
+                       ? status === 'CANCELLED'
+                         ? 'bg-red-500 text-white hover:bg-red-400'
+                         : 'bg-emerald-500 text-white hover:bg-emerald-400' 
+                       : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                 }`}
+               >
+                 {info.label}
+               </button>
+             );
+           })}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Customer Details */}
@@ -344,6 +451,140 @@ const FormDetail = () => {
                   ? parseInt(form.logistics.endMeter) - parseInt(form.logistics.startMeter) 
                   : '-'}
               </span>
+            </div>
+           </div>
+         </div>
+       )}
+
+      {/* Payment Modal */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden">
+            <div className="bg-emerald-600 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-white font-bold flex items-center gap-2">
+                <Receipt size={18} /> Generate Receipt
+              </h3>
+              <button onClick={() => setShowPaymentModal(false)} className="text-white/80 hover:text-white">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="bg-slate-50 rounded-xl p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Customer:</span>
+                  <span className="font-bold">{form.customer?.name}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Total Amount:</span>
+                  <span className="font-bold">₹{(form.pricing?.finalAmount || form.billing?.total || 0).toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-slate-700 block mb-2">
+                  Amount Received *
+                </label>
+                <input
+                  type="number"
+                  value={paymentData.advancePaid}
+                  onChange={(e) => setPaymentData({ ...paymentData, advancePaid: e.target.value })}
+                  placeholder="Enter amount"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-slate-700 block mb-2">
+                  Payment Mode *
+                </label>
+                <select
+                  value={paymentData.paymentMode}
+                  onChange={(e) => setPaymentData({ ...paymentData, paymentMode: e.target.value })}
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:border-emerald-500"
+                >
+                  {PAYMENT_MODES.map(mode => (
+                    <option key={mode} value={mode}>{mode}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-slate-700 block mb-2">
+                  Transaction ID (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={paymentData.transactionId}
+                  onChange={(e) => setPaymentData({ ...paymentData, transactionId: e.target.value })}
+                  placeholder="UPI Ref / Transaction No"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-slate-700 block mb-2">
+                  Payment Screenshot (Optional)
+                </label>
+                <input
+                  type="file"
+                  ref={screenshotRef}
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleScreenshotUpload}
+                  className="hidden"
+                />
+                {screenshotPreview ? (
+                  <div className="relative">
+                    <img src={screenshotPreview} alt="Payment" className="w-full h-40 object-cover rounded-xl border-2 border-emerald-200" />
+                    <button
+                      onClick={handleRemoveScreenshot}
+                      className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => screenshotRef.current?.click()}
+                    className="w-full border-2 border-dashed border-slate-300 rounded-xl p-4 flex flex-col items-center justify-center hover:border-emerald-400 hover:bg-emerald-50/50 transition-colors"
+                  >
+                    <Camera size={28} className="text-slate-400 mb-2" />
+                    <span className="text-sm text-slate-500">Tap to capture payment screenshot</span>
+                  </button>
+                )}
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-slate-700 block mb-2">
+                  Notes (Optional)
+                </label>
+                <textarea
+                  value={paymentData.notes}
+                  onChange={(e) => setPaymentData({ ...paymentData, notes: e.target.value })}
+                  placeholder="Any notes..."
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none resize-none focus:border-emerald-500"
+                  rows="2"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setShowPaymentModal(false)}
+                  className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold text-sm hover:bg-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleGenerateReceipt}
+                  disabled={generateReceiptMutation.isPending}
+                  className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-semibold text-sm hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {generateReceiptMutation.isPending ? 'Generating...' : (
+                    <> <Receipt size={16} /> Generate Receipt </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
