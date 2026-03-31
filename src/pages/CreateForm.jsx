@@ -455,6 +455,11 @@ const CreateForm = () => {
       setIsLoadingForm(true);
       api.get(`/forms/${editId}`).then(res => {
         const form = res.data.data;
+        const premises = form.premises || {};
+        const floorsWithIds = (premises.floors || []).map((f, i) => ({
+          ...f,
+          id: f.id || Date.now() + i
+        }));
         setFormData({
           _id: form._id,
           branchId: form.branchId?._id || form.branchId || '',
@@ -465,7 +470,7 @@ const CreateForm = () => {
           referenceBy: form.referenceBy || '',
           attDetails: form.attDetails || { treatmentTypes: [], chemicals: [], methods: ['Drill'], baseSolutions: ['Water Based'], constructionPhase: '', warranty: '' },
           amcServices: form.amcServices || [],
-          premises: form.premises || { type: '', floors: [{ id: Date.now(), label: 'Floor 1', length: 0, width: 0, area: 0 }], totalArea: 0 },
+          premises: { ...premises, floors: floorsWithIds },
           ratePerSqft: form.ratePerSqft || 0,
           perFloorExtra: form.perFloorExtra || 0,
           pricing: form.pricing || { baseAmount: 0, gstPercent: 18, gstAmount: 0, discountPercent: 0, discountAmount: 0, finalAmount: 0 },
