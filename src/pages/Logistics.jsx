@@ -33,6 +33,7 @@ const Logistics = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [rejectRemark, setRejectRemark] = useState('');
   const [showRejectModal, setShowRejectModal] = useState(null);
+  const [historyFilter, setHistoryFilter] = useState('all'); // 'all', 'approved', 'rejected', 'settled'
 
   const [travelData, setTravelData] = useState({
     purpose: '',
@@ -276,21 +277,39 @@ const Logistics = () => {
 
   const getStatusBadge = (log) => {
     if (log.employeeStatus === 'ACCEPTED') {
-      return { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'SETTLED ✅' };
-    }
-    if (log.superAdminStatus === 'APPROVED') {
-      return { bg: 'bg-blue-100', text: 'text-blue-700', label: 'APPROVED - Accept Pending' };
+      return { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'SETTLED', color: 'emerald' };
     }
     if (log.superAdminStatus === 'REJECTED') {
-      return { bg: 'bg-red-100', text: 'text-red-700', label: 'REJECTED' };
-    }
-    if (log.branchAdminStatus === 'APPROVED') {
-      return { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Branch Approved - Awaiting HQ' };
+      return { bg: 'bg-red-100', text: 'text-red-700', label: 'REJECTED by HQ', color: 'red' };
     }
     if (log.branchAdminStatus === 'REJECTED') {
-      return { bg: 'bg-red-100', text: 'text-red-700', label: 'REJECTED by Branch' };
+      return { bg: 'bg-red-100', text: 'text-red-700', label: 'REJECTED by Branch', color: 'red' };
     }
-    return { bg: 'bg-slate-100', text: 'text-slate-700', label: 'PENDING' };
+    if (log.superAdminStatus === 'APPROVED') {
+      return { bg: 'bg-blue-100', text: 'text-blue-700', label: 'APPROVED', color: 'blue' };
+    }
+    if (log.branchAdminStatus === 'APPROVED') {
+      return { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Branch Approved', color: 'amber' };
+    }
+    return { bg: 'bg-slate-100', text: 'text-slate-700', label: 'PENDING', color: 'slate' };
+  };
+
+  const filterHistory = (logs) => {
+    if (historyFilter === 'all') return logs;
+    if (historyFilter === 'approved') {
+      return logs.filter(l => 
+        l.branchAdminStatus === 'APPROVED' || l.superAdminStatus === 'APPROVED'
+      );
+    }
+    if (historyFilter === 'rejected') {
+      return logs.filter(l => 
+        l.branchAdminStatus === 'REJECTED' || l.superAdminStatus === 'REJECTED'
+      );
+    }
+    if (historyFilter === 'settled') {
+      return logs.filter(l => l.employeeStatus === 'ACCEPTED');
+    }
+    return logs;
   };
 
   const formatCurrency = (num) => {
@@ -886,17 +905,39 @@ const Logistics = () => {
       {showHistory && (
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100">
-            <h3 className="font-bold text-slate-800">Travel History</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-800">Travel History</h3>
+              <div className="flex gap-2">
+                {[
+                  { id: 'all', label: 'All' },
+                  { id: 'approved', label: 'Approved' },
+                  { id: 'rejected', label: 'Rejected' },
+                  { id: 'settled', label: 'Settled' }
+                ].map(filter => (
+                  <button
+                    key={filter.id}
+                    onClick={() => setHistoryFilter(filter.id)}
+                    className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
+                      historyFilter === filter.id
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
           
-          <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto">
-            {travelHistory?.length === 0 ? (
+          <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
+            {filterHistory(travelHistory)?.length === 0 ? (
               <div className="p-8 text-center text-slate-400">
                 <Route size={32} className="mx-auto mb-2 opacity-50" />
-                <p>No travel history</p>
+                <p>No travel history found</p>
               </div>
             ) : (
-              travelHistory?.map(log => {
+              filterHistory(travelHistory)?.map(log => {
                 const purpose = getPurposeInfo(log.purpose);
                 const status = getStatusBadge(log);
                 const canAccept = !isAdmin && log.employeeStatus === 'PENDING' && log.superAdminStatus === 'APPROVED';
@@ -928,7 +969,7 @@ const Logistics = () => {
                           <span className="text-xs bg-emerald-100 px-2 py-1 rounded">
                             <span className="text-emerald-700 font-bold">{log.distance} km</span>
                           </span>
-                          {isAdmin && (
+                          {(isAdmin || log.employeeStatus === 'ACCEPTED') && (
                             <span className="text-xs bg-purple-100 px-2 py-1 rounded">
                               <span className="text-purple-700 font-bold">{formatCurrency(log.allowance)}</span>
                             </span>
@@ -937,7 +978,7 @@ const Logistics = () => {
                         
                         <div className="flex items-center justify-between mt-3">
                           <p className="text-xs text-slate-400">
-                            {new Date(log.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                            {new Date(log.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                             {log.startTime && ` at ${new Date(log.startTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`}
                           </p>
                           {canAccept && (
@@ -947,6 +988,12 @@ const Logistics = () => {
                             >
                               <Check size={14} /> Accept & Settle
                             </button>
+                          )}
+                          {status.color === 'red' && log.superAdminRemark && (
+                            <span className="text-xs text-red-500">Reason: {log.superAdminRemark}</span>
+                          )}
+                          {status.color === 'red' && log.branchAdminRemark && (
+                            <span className="text-xs text-red-500">Reason: {log.branchAdminRemark}</span>
                           )}
                         </div>
                       </div>

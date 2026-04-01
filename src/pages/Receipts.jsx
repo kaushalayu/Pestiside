@@ -25,6 +25,14 @@ const Receipts = () => {
     queryFn: fetchForms
   });
 
+  // Calculate stats from receipts
+  const stats = receipts ? {
+    totalReceipts: receipts.length,
+    totalAmount: receipts.reduce((sum, r) => sum + (r.totalAmount || 0), 0),
+    totalCollected: receipts.reduce((sum, r) => sum + (r.advancePaid || 0), 0),
+    pendingAmount: receipts.reduce((sum, r) => sum + (r.balanceDue || 0), 0),
+  } : { totalReceipts: 0, totalAmount: 0, totalCollected: 0, pendingAmount: 0 };
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewReceipt, setViewReceipt] = useState(null);
   const [search, setSearch] = useState('');
@@ -258,6 +266,26 @@ const Receipts = () => {
           className="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-medium text-sm flex items-center gap-2 shadow-lg">
           <Plus size={18} /> New Receipt
         </button>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-4 text-white shadow-lg">
+          <p className="text-xs font-medium opacity-80">Total Receipts</p>
+          <p className="text-2xl font-bold mt-1">{stats.totalReceipts}</p>
+        </div>
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-4 text-white shadow-lg">
+          <p className="text-xs font-medium opacity-80">Total Amount</p>
+          <p className="text-2xl font-bold mt-1">₹{stats.totalAmount.toLocaleString('en-IN')}</p>
+        </div>
+        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow-lg">
+          <p className="text-xs font-medium opacity-80">Collected</p>
+          <p className="text-2xl font-bold mt-1">₹{stats.totalCollected.toLocaleString('en-IN')}</p>
+        </div>
+        <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl p-4 text-white shadow-lg">
+          <p className="text-xs font-medium opacity-80">Pending</p>
+          <p className="text-2xl font-bold mt-1">₹{stats.pendingAmount.toLocaleString('en-IN')}</p>
+        </div>
       </div>
 
       {/* Table */}
