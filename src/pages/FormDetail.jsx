@@ -49,16 +49,12 @@ const CANCELLABLE_STATES = ['DRAFT', 'SUBMITTED', 'SCHEDULED'];
 
   const generateReceiptMutation = useMutation({
     mutationFn: async (data) => {
-      const formData = new FormData();
-      formData.append('advancePaid', data.advancePaid);
-      formData.append('paymentMode', data.paymentMode);
-      formData.append('transactionId', data.transactionId || '');
-      formData.append('notes', data.notes || '');
-      if (data.screenshot) {
-        formData.append('paymentScreenshot', data.screenshot);
-      }
-      const response = await api.post(`/receipts/from-form/${id}`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      const response = await api.post(`/receipts/from-form/${id}`, {
+        advancePaid: data.advancePaid,
+        paymentMode: data.paymentMode,
+        transactionId: data.transactionId || '',
+        notes: data.notes || '',
+        paymentScreenshot: data.screenshot || null
       });
       return response;
     },
@@ -78,13 +74,37 @@ const CANCELLABLE_STATES = ['DRAFT', 'SUBMITTED', 'SCHEDULED'];
   const handleScreenshotUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('File size should be less than 5MB');
-        return;
-      }
-      setPaymentScreenshot(file);
       const reader = new FileReader();
-      reader.onloadend = () => setScreenshotPreview(reader.result);
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxSize = 1200;
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > height && width > maxSize) {
+            height = (height * maxSize) / width;
+            width = maxSize;
+          } else if (height > maxSize) {
+            width = (width * maxSize) / height;
+            height = maxSize;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.7);
+          
+          setPaymentScreenshot(compressed);
+          setScreenshotPreview(compressed);
+        };
+        img.src = e.target.result;
+      };
+      reader.onerror = () => {
+        toast.error('Failed to read file');
+      };
       reader.readAsDataURL(file);
     }
   };

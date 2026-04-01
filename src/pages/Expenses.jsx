@@ -139,20 +139,51 @@ const Expenses = () => {
     if (!file) return;
     
     setUploadingBill(true);
-    const formData = new FormData();
-    formData.append('file', file);
     
-    try {
-      const res = await api.post('/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      setFormData(prev => ({ ...prev, billPhoto: res.data.data }));
-      toast.success('Bill photo uploaded');
-    } catch (_err) {
-      toast.error('Upload failed');
-    } finally {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = document.createElement('canvas');
+        const maxSize = 1200;
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > height && width > maxSize) {
+          height = (height * maxSize) / width;
+          width = maxSize;
+        } else if (height > maxSize) {
+          width = (width * maxSize) / height;
+          height = maxSize;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressed = canvas.toDataURL('image/jpeg', 0.7);
+        
+        try {
+          const res = await api.post('/upload', { file: compressed });
+          setFormData(prev => ({ ...prev, billPhoto: res.data.data }));
+          toast.success('Bill photo uploaded');
+        } catch (_err) {
+          toast.error('Upload failed');
+        } finally {
+          setUploadingBill(false);
+        }
+      };
+      img.onerror = () => {
+        toast.error('Failed to process image');
+        setUploadingBill(false);
+      };
+      img.src = e.target.result;
+    };
+    reader.onerror = () => {
+      toast.error('Failed to read file');
       setUploadingBill(false);
-    }
+    };
+    reader.readAsDataURL(file);
   };
 
   const createMutation = useMutation({

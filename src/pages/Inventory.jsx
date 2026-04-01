@@ -537,11 +537,17 @@ const Inventory = () => {
   const handleAddPayment = async (e) => {
     e.preventDefault();
     try {
-      if (!payment.branchId || !payment.amount) {
-        return toast.error('Fill all required fields');
+      if (!payment.amount) {
+        return toast.error('Enter payment amount');
       }
-      await api.post('/payments', payment);
-      toast.success('Payment recorded successfully');
+      
+      const paymentData = {
+        ...payment,
+        branchId: user?.branchId?._id || user?.branchId
+      };
+      
+      await api.post('/payments', paymentData);
+      toast.success('Payment recorded successfully!');
       setPayment({ branchId: '', amount: '', paymentMethod: 'UPI', transactionId: '', notes: '' });
       fetchData();
     } catch (error) {
@@ -605,6 +611,7 @@ const Inventory = () => {
               ] : []),
               ...(user.role === 'branch_admin' ? [
                 { id: 'purchase-request', label: 'Buy Chemicals', icon: ShoppingCart },
+                { id: 'make-payment', label: 'Make Payment', icon: CreditCard },
                 { id: 'distribute', label: 'Distribute', icon: Send },
                 { id: 'transfer-requests', label: 'Stock Transfers', icon: ArrowRightLeft },
                 { id: 'accounts', label: 'Accounts', icon: DollarSign }
@@ -698,9 +705,152 @@ const Inventory = () => {
                       ))}
                     </div>
                   </div>
-)}
-            </div>
-          )}
+                )}
+              </div>
+            )}
+
+            {/* Branch Admin Dashboard */}
+            {user.role === 'branch_admin' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                  <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Package size={16} />
+                      <span className="text-[10px] font-semibold uppercase opacity-80">Total Stock</span>
+                    </div>
+                    <p className="text-2xl font-black">
+                      {inventory.filter(i => i.ownerType === 'Branch').reduce((sum, i) => sum + (i.displayQuantity || 0), 0)} L
+                    </p>
+                    <p className="text-[10px] opacity-60 mt-1">At Branch</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-purple-600 to-purple-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Send size={14} className="md:w-4 md:h-4" />
+                      <span className="text-[9px] md:text-[10px] font-semibold uppercase opacity-80">Distributed</span>
+                    </div>
+                    <p className="text-xl md:text-2xl font-black truncate">
+                      {inventory.filter(i => i.ownerType === 'Employee').reduce((sum, i) => sum + (i.displayQuantity || 0), 0)} L
+                    </p>
+                    <p className="text-[9px] md:text-[10px] opacity-60 mt-1">To Employees</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+                    <div className="flex items-center gap-2 mb-2">
+                      <DollarSign size={14} className="md:w-4 md:h-4" />
+                      <span className="text-[9px] md:text-[10px] font-semibold uppercase opacity-80">Received</span>
+                    </div>
+                    <p className="text-xl md:text-2xl font-black truncate">{formatCurrency(myBalance?.totalReceivedValue || 0)}</p>
+                    <p className="text-[9px] md:text-[10px] opacity-60 mt-1">From HQ</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-amber-600 to-amber-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+                    <div className="flex items-center gap-2 mb-2">
+                      <AlertCircle size={14} className="md:w-4 md:h-4" />
+                      <span className="text-[9px] md:text-[10px] font-semibold uppercase opacity-80">Pending</span>
+                    </div>
+                    <p className="text-xl md:text-2xl font-black truncate">{formatCurrency(myBalance?.pendingBalance || 0)}</p>
+                    <p className="text-[9px] md:text-[10px] opacity-60 mt-1">Payment Due</p>
+                  </div>
+                </div>
+
+                {/* Quick Actions for Branch Admin */}
+                <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                  <h3 className="font-bold text-slate-800 mb-3">Quick Actions</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <button 
+                      onClick={() => setActiveTab('purchase-request')}
+                      className="p-4 bg-blue-50 rounded-xl text-center hover:bg-blue-100 transition-colors"
+                    >
+                      <ShoppingCart size={24} className="mx-auto mb-2 text-blue-600" />
+                      <p className="text-sm font-bold text-blue-700">Buy Chemicals</p>
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('make-payment')}
+                      className="p-4 bg-emerald-50 rounded-xl text-center hover:bg-emerald-100 transition-colors"
+                    >
+                      <CreditCard size={24} className="mx-auto mb-2 text-emerald-600" />
+                      <p className="text-sm font-bold text-emerald-700">Make Payment</p>
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('distribute')}
+                      className="p-4 bg-orange-50 rounded-xl text-center hover:bg-orange-100 transition-colors"
+                    >
+                      <Send size={24} className="mx-auto mb-2 text-orange-600" />
+                      <p className="text-sm font-bold text-orange-700">Distribute</p>
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('transfer-requests')}
+                      className="p-4 bg-purple-50 rounded-xl text-center hover:bg-purple-100 transition-colors"
+                    >
+                      <ArrowRightLeft size={24} className="mx-auto mb-2 text-purple-600" />
+                      <p className="text-sm font-bold text-purple-700">Transfers</p>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Technician/Sales Dashboard */}
+            {(user.role === 'technician' || user.role === 'sales') && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+                  <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Package size={16} />
+                      <span className="text-[10px] font-semibold uppercase opacity-80">My Stock</span>
+                    </div>
+                    <p className="text-2xl font-black">
+                      {employeeInventory.reduce((sum, i) => sum + i.currentStock, 0)} L
+                    </p>
+                    <p className="text-[10px] opacity-60 mt-1">{employeeInventory.length} Items</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Wallet size={14} className="md:w-4 md:h-4" />
+                      <span className="text-[9px] md:text-[10px] font-semibold uppercase opacity-80">Used</span>
+                    </div>
+                    <p className="text-xl md:text-2xl font-black truncate">
+                      {employeeInventory.reduce((sum, i) => sum + (i.totalReturned || 0), 0)} L
+                    </p>
+                    <p className="text-[9px] md:text-[10px] opacity-60 mt-1">Total Used</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-amber-600 to-amber-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+                    <div className="flex items-center gap-2 mb-2">
+                      <History size={14} className="md:w-4 md:h-4" />
+                      <span className="text-[9px] md:text-[10px] font-semibold uppercase opacity-80">Jobs</span>
+                    </div>
+                    <p className="text-xl md:text-2xl font-black truncate">{employeeUsageHistory.length}</p>
+                    <p className="text-[9px] md:text-[10px] opacity-60 mt-1">Usage Records</p>
+                  </div>
+                </div>
+
+                {/* Quick Actions for Technician/Sales */}
+                <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                  <h3 className="font-bold text-slate-800 mb-3">Quick Actions</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <button 
+                      onClick={() => setActiveTab('my-stock')}
+                      className="p-4 bg-blue-50 rounded-xl text-center hover:bg-blue-100 transition-colors"
+                    >
+                      <Package size={24} className="mx-auto mb-2 text-blue-600" />
+                      <p className="text-sm font-bold text-blue-700">My Stock</p>
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('usage')}
+                      className="p-4 bg-red-50 rounded-xl text-center hover:bg-red-100 transition-colors"
+                    >
+                      <AlertCircle size={24} className="mx-auto mb-2 text-red-600" />
+                      <p className="text-sm font-bold text-red-700">Use for Job</p>
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('history')}
+                      className="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-100 transition-colors"
+                    >
+                      <History size={24} className="mx-auto mb-2 text-slate-600" />
+                      <p className="text-sm font-bold text-slate-700">History</p>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -914,6 +1064,166 @@ const Inventory = () => {
         {/* Products Tab */}
         {activeTab === 'products' && isSuperAdmin && (
           <div className="space-y-6">
+            {/* Add New Product Form */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-lg">
+              <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 py-4">
+                <h3 className="text-white font-bold flex items-center gap-2">
+                  <Plus size={20} /> Add New Product / Chemical
+                </h3>
+              </div>
+              <form onSubmit={handleAddChemical} className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 block mb-2">Product Name *</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={newChemical.name} 
+                      onChange={e => setNewChemical({...newChemical, name: e.target.value})}
+                      className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-emerald-500"
+                      placeholder="e.g., Temiphos 50EC"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 block mb-2">Category</label>
+                    <select 
+                      value={newChemical.category} 
+                      onChange={e => setNewChemical({...newChemical, category: e.target.value})}
+                      className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-emerald-500"
+                    >
+                      <option value="Insecticide">Insecticide</option>
+                      <option value="Herbicide">Herbicide</option>
+                      <option value="Fungicide">Fungicide</option>
+                      <option value="Rodenticide">Rodenticide</option>
+                      <option value="Pesticide">Pesticide</option>
+                      <option value="Fumigant">Fumigant</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 block mb-2">Unit</label>
+                    <select 
+                      value={newChemical.unitSystem} 
+                      onChange={e => setNewChemical({...newChemical, unitSystem: e.target.value, unit: e.target.value === 'L' ? 'Liters' : e.target.value === 'KG' ? 'Kilograms' : 'Units'})}
+                      className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-emerald-500"
+                    >
+                      <option value="L">Liters (L)</option>
+                      <option value="KG">Kilograms (KG)</option>
+                      <option value="UNIT">Units</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 block mb-2">Initial Stock</label>
+                    <input 
+                      type="number" 
+                      value={newChemical.mainStock} 
+                      onChange={e => setNewChemical({...newChemical, mainStock: e.target.value})}
+                      className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-emerald-500"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 block mb-2">Purchase Price (₹)</label>
+                    <input 
+                      type="number" 
+                      value={newChemical.purchasePrice} 
+                      onChange={e => setNewChemical({...newChemical, purchasePrice: e.target.value})}
+                      className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-emerald-500"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 block mb-2">Description</label>
+                    <input 
+                      type="text" 
+                      value={newChemical.description} 
+                      onChange={e => setNewChemical({...newChemical, description: e.target.value})}
+                      className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-emerald-500"
+                      placeholder="Optional description"
+                    />
+                  </div>
+                </div>
+                <button type="submit" className="w-full md:w-auto px-8 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 flex items-center justify-center gap-2">
+                  <Plus size={18} /> Add Product
+                </button>
+              </form>
+            </div>
+
+            {/* Add Stock to Existing Product */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-lg">
+              <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4">
+                <h3 className="text-white font-bold flex items-center gap-2">
+                  <Package size={20} /> Add Stock to Existing Product
+                </h3>
+              </div>
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const chemicalId = formData.get('chemicalId');
+                const quantity = formData.get('quantity');
+                const unit = formData.get('unit');
+                const notes = formData.get('notes');
+                
+                if (!chemicalId || !quantity) {
+                  return toast.error('Select product and enter quantity');
+                }
+                
+                try {
+                  await api.post('/inventory/add-stock', { chemicalId, quantity, unit, notes });
+                  toast.success('Stock added successfully!');
+                  e.target.reset();
+                  fetchData();
+                } catch (error) {
+                  toast.error(error.response?.data?.message || 'Failed to add stock');
+                }
+              }} className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                  <div className="md:col-span-1">
+                    <label className="text-sm font-semibold text-slate-700 block mb-2">Select Product *</label>
+                    <select name="chemicalId" required className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-blue-500">
+                      <option value="">Select Product</option>
+                      {chemicals.map(chem => (
+                        <option key={chem._id} value={chem._id}>{chem.name} (Stock: {chem.mainStock || 0} {chem.unitSystem})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 block mb-2">Quantity *</label>
+                    <input 
+                      type="number" 
+                      name="quantity" 
+                      required
+                      className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-blue-500"
+                      placeholder="e.g., 10"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 block mb-2">Unit</label>
+                    <select name="unit" className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-blue-500">
+                      <option value="L">Liters (L)</option>
+                      <option value="KG">Kilograms (KG)</option>
+                      <option value="UNIT">Units</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 block mb-2">Notes</label>
+                    <input 
+                      type="text" 
+                      name="notes"
+                      className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-blue-500"
+                      placeholder="e.g., Stock replenishment"
+                    />
+                  </div>
+                </div>
+                <button type="submit" className="w-full md:w-auto px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 flex items-center justify-center gap-2">
+                  <Plus size={18} /> Add Stock
+                </button>
+              </form>
+            </div>
+
+            {/* Products List */}
             <SectionCard title="Products / Chemicals" icon={Beaker} headerBg="bg-gradient-to-r from-amber-600 to-amber-500">
               {chemicals.length > 0 ? (
                 <div className="overflow-x-auto">
@@ -925,6 +1235,7 @@ const Inventory = () => {
                         <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Stock</th>
                         <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Unit</th>
                         <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Price</th>
+                        <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -932,9 +1243,18 @@ const Inventory = () => {
                         <tr key={chem._id} className="border-b hover:bg-slate-50">
                           <td className="py-3 px-4 font-bold">{chem.name}</td>
                           <td className="py-3 px-4 text-slate-600">{chem.category}</td>
-                          <td className="py-3 px-4 text-right font-bold">{chem.mainStock || 0}</td>
-                          <td className="py-3 px-4 text-right">{chem.unit}</td>
+                          <td className="py-3 px-4 text-right font-bold text-blue-600">{chem.mainStock || 0}</td>
+                          <td className="py-3 px-4 text-right">{chem.unit || chem.unitSystem}</td>
                           <td className="py-3 px-4 text-right">₹{chem.purchasePrice || 0}</td>
+                          <td className="py-3 px-4 text-center">
+                            <button 
+                              onClick={() => handleDeleteChemical(chem._id)}
+                              className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                              title="Delete"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -944,7 +1264,7 @@ const Inventory = () => {
                 <div className="text-center py-12 text-slate-500">
                   <Beaker size={48} className="mx-auto mb-4 opacity-50" />
                   <p className="text-lg font-semibold">No Products Found</p>
-                  <p className="text-sm mt-2">Add chemicals from the form below</p>
+                  <p className="text-sm mt-2">Add products from the form above</p>
                 </div>
               )}
             </SectionCard>
@@ -967,12 +1287,125 @@ const Inventory = () => {
         {/* Accounts Tab */}
         {activeTab === 'accounts' && (
           <div className="space-y-6">
-            <SectionCard title="Branch Accounts" icon={DollarSign} headerBg="bg-gradient-to-r from-rose-600 to-rose-500">
-              <div className="text-center py-12 text-slate-500">
-                <DollarSign size={48} className="mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-semibold">Branch Accounts</p>
-                <p className="text-sm mt-2">Account details will appear here</p>
+            {/* Balance Summary */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+              <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+                <p className="text-[10px] font-semibold uppercase opacity-80">Received Value</p>
+                <p className="text-2xl font-black">{formatCurrency(myBalance?.totalReceivedValue || 0)}</p>
               </div>
+              <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+                <p className="text-[10px] font-semibold uppercase opacity-80">Total Paid</p>
+                <p className="text-2xl font-black">{formatCurrency(myBalance?.totalPaid || 0)}</p>
+              </div>
+              <div className="bg-gradient-to-br from-amber-600 to-amber-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+                <p className="text-[10px] font-semibold uppercase opacity-80">Pending Balance</p>
+                <p className="text-2xl font-black">{formatCurrency(myBalance?.pendingBalance || 0)}</p>
+              </div>
+              <div className="bg-gradient-to-br from-purple-600 to-purple-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+                <p className="text-[10px] font-semibold uppercase opacity-80">Collections</p>
+                <p className="text-2xl font-black">{formatCurrency(collections)}</p>
+              </div>
+            </div>
+            <SectionCard title="Branch Account Summary" icon={DollarSign} headerBg="bg-gradient-to-r from-rose-600 to-rose-500">
+              {myBalance ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-emerald-50 p-4 rounded-xl">
+                      <p className="text-sm text-emerald-600 font-medium">Total Stock Value</p>
+                      <p className="text-2xl font-bold text-emerald-700">{formatCurrency(myBalance?.totalInventoryValue || 0)}</p>
+                    </div>
+                    <div className="bg-blue-50 p-4 rounded-xl">
+                      <p className="text-sm text-blue-600 font-medium">Available Stock</p>
+                      <p className="text-2xl font-bold text-blue-700">{myBalance?.availableItems?.toFixed(2) || 0} L</p>
+                    </div>
+                  </div>
+                  <div className="text-center py-4 text-slate-500">
+                    <p className="text-sm">Pending payments can be made from the Make Payment tab</p>
+                    <button 
+                      onClick={() => setActiveTab('make-payment')}
+                      className="mt-2 px-6 py-2 bg-emerald-600 text-white rounded-lg font-semibold text-sm hover:bg-emerald-700"
+                    >
+                      Go to Make Payment
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-500">
+                  <DollarSign size={48} className="mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-semibold">Loading...</p>
+                </div>
+              )}
+            </SectionCard>
+          </div>
+        )}
+
+        {/* Make Payment Tab - For Branch Admin */}
+        {activeTab === 'make-payment' && user.role === 'branch_admin' && (
+          <div className="space-y-6">
+            <SectionCard title="Make Payment to HQ" icon={CreditCard} headerBg="bg-gradient-to-r from-emerald-600 to-emerald-500">
+              <form onSubmit={handleAddPayment} className="space-y-5">
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle size={18} className="text-amber-600" />
+                    <p className="font-bold text-amber-800">Pending Balance</p>
+                  </div>
+                  <p className="text-3xl font-black text-amber-700">{formatCurrency(myBalance?.pendingBalance || 0)}</p>
+                </div>
+                
+                <div>
+                  <label className="text-sm font-semibold text-slate-700 block mb-2">Payment Amount (₹) *</label>
+                  <input 
+                    type="number" 
+                    required
+                    value={payment.amount} 
+                    onChange={e => setPayment({...payment, amount: e.target.value})}
+                    className="w-full bg-white border border-slate-200 px-4 py-4 rounded-xl text-lg font-bold outline-none focus:border-emerald-500"
+                    placeholder="Enter amount"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-slate-700 block mb-2">Payment Method *</label>
+                  <select 
+                    value={payment.paymentMethod} 
+                    onChange={e => setPayment({...payment, paymentMethod: e.target.value})}
+                    className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-emerald-500"
+                  >
+                    <option value="UPI">UPI</option>
+                    <option value="BANK_TRANSFER">Bank Transfer</option>
+                    <option value="CASH">Cash</option>
+                    <option value="CHEQUE">Cheque</option>
+                    <option value="RTGS">RTGS</option>
+                    <option value="NEFT">NEFT</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-slate-700 block mb-2">Transaction ID (Optional)</label>
+                  <input 
+                    type="text" 
+                    value={payment.transactionId} 
+                    onChange={e => setPayment({...payment, transactionId: e.target.value})}
+                    className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-emerald-500"
+                    placeholder="UPI Ref / Transaction ID"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-slate-700 block mb-2">Notes (Optional)</label>
+                  <textarea 
+                    value={payment.notes} 
+                    onChange={e => setPayment({...payment, notes: e.target.value})}
+                    className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-emerald-500 resize-none"
+                    rows="2"
+                    placeholder="Payment notes..."
+                  />
+                </div>
+
+                <button type="submit" className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-emerald-700 flex items-center justify-center gap-2">
+                  <CreditCard size={18} /> Submit Payment
+                </button>
+              </form>
             </SectionCard>
           </div>
         )}
@@ -980,12 +1413,56 @@ const Inventory = () => {
         {/* Payments Tab */}
         {activeTab === 'payments' && isSuperAdmin && (
           <div className="space-y-6">
-            <SectionCard title="Payments" icon={CreditCard} headerBg="bg-gradient-to-r from-indigo-600 to-indigo-500">
-              <div className="text-center py-12 text-slate-500">
-                <CreditCard size={48} className="mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-semibold">Payment History</p>
-                <p className="text-sm mt-2">No payment records found</p>
+            {/* Payment Stats */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+              <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+                <p className="text-[10px] font-semibold uppercase opacity-80">Total Received</p>
+                <p className="text-2xl font-black">{formatCurrency(branchBalances.reduce((a, b) => a + b.totalPaid, 0))}</p>
               </div>
+              <div className="bg-gradient-to-br from-amber-600 to-amber-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+                <p className="text-[10px] font-semibold uppercase opacity-80">Pending</p>
+                <p className="text-2xl font-black">{formatCurrency(branchBalances.reduce((a, b) => a + b.pendingBalance, 0))}</p>
+              </div>
+              <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+                <p className="text-[10px] font-semibold uppercase opacity-80">Total Value</p>
+                <p className="text-2xl font-black">{formatCurrency(branchBalances.reduce((a, b) => a + b.totalReceivedValue, 0))}</p>
+              </div>
+              <div className="bg-gradient-to-br from-purple-600 to-purple-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+                <p className="text-[10px] font-semibold uppercase opacity-80">Branches</p>
+                <p className="text-2xl font-black">{branches.length}</p>
+              </div>
+            </div>
+
+            <SectionCard title="Branch Payment Status" icon={CreditCard} headerBg="bg-gradient-to-r from-indigo-600 to-indigo-500">
+              {branchBalances.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-slate-50">
+                        <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Branch</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Received</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Paid</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Pending</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {branchBalances.map(branch => (
+                        <tr key={branch._id} className="border-b hover:bg-slate-50">
+                          <td className="py-3 px-4 font-bold">{branch.branchName}</td>
+                          <td className="py-3 px-4 text-right">{formatCurrency(branch.totalReceivedValue || 0)}</td>
+                          <td className="py-3 px-4 text-right text-emerald-600 font-bold">{formatCurrency(branch.totalPaid || 0)}</td>
+                          <td className="py-3 px-4 text-right text-amber-600 font-bold">{formatCurrency(branch.pendingBalance || 0)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-500">
+                  <CreditCard size={48} className="mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-semibold">Loading...</p>
+                </div>
+              )}
             </SectionCard>
           </div>
         )}
@@ -993,12 +1470,134 @@ const Inventory = () => {
         {/* Distribute Tab (Branch Admin) */}
         {activeTab === 'distribute' && user.role === 'branch_admin' && (
           <div className="space-y-6">
-            <SectionCard title="Distribute Stock" icon={Send} headerBg="bg-gradient-to-r from-orange-600 to-orange-500">
-              <div className="text-center py-12 text-slate-500">
-                <Send size={48} className="mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-semibold">Distribute Stock</p>
-                <p className="text-sm mt-2">Distribute chemicals to employees</p>
+            {/* Branch Stock Summary */}
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+              <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+                <p className="text-[10px] font-semibold uppercase opacity-80">Branch Stock</p>
+                <p className="text-2xl font-black">
+                  {inventory.filter(i => i.ownerType === 'Branch').reduce((sum, i) => sum + (i.displayQuantity || 0), 0)} L
+                </p>
               </div>
+              <div className="bg-gradient-to-br from-purple-600 to-purple-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+                <p className="text-[10px] font-semibold uppercase opacity-80">Distributed</p>
+                <p className="text-2xl font-black">
+                  {inventory.filter(i => i.ownerType === 'Employee').reduce((sum, i) => sum + (i.displayQuantity || 0), 0)} L
+                </p>
+              </div>
+              <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+                <p className="text-[10px] font-semibold uppercase opacity-80">Available</p>
+                <p className="text-2xl font-black">
+                  {(inventory.filter(i => i.ownerType === 'Branch').reduce((sum, i) => sum + (i.displayQuantity || 0), 0) - 
+                    inventory.filter(i => i.ownerType === 'Employee').reduce((sum, i) => sum + (i.displayQuantity || 0), 0)).toFixed(1)} L
+                </p>
+              </div>
+            </div>
+
+            <SectionCard title="Distribute Stock to Employees" icon={Send} headerBg="bg-gradient-to-r from-orange-600 to-orange-500">
+              <form onSubmit={handleDistributeSubmit} className="space-y-5">
+                <div>
+                  <label className="text-sm font-semibold text-slate-700 block mb-2">Select Employee *</label>
+                  <select 
+                    required
+                    value={distributeForm.employeeId} 
+                    onChange={e => setDistributeForm({...distributeForm, employeeId: e.target.value})}
+                    className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-orange-500"
+                  >
+                    <option value="">Select Employee</option>
+                    {branchUsers.map(emp => (
+                      <option key={emp._id} value={emp._id}>{emp.name} ({emp.role})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-slate-700 block mb-2">Select Chemical *</label>
+                  <select 
+                    required
+                    value={distributeForm.items[0]?.chemicalId || ''} 
+                    onChange={e => setDistributeForm({...distributeForm, items: [{ ...distributeForm.items[0], chemicalId: e.target.value }]})}
+                    className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-orange-500"
+                  >
+                    <option value="">Select Chemical</option>
+                    {inventory.filter(i => i.ownerType === 'Branch' && (i.displayQuantity || 0) > 0).map(inv => (
+                      <option key={inv._id} value={inv.chemicalId?._id}>{inv.chemicalId?.name} (Available: {inv.displayQuantity || 0} {inv.displayUnit || 'L'})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 block mb-2">Quantity *</label>
+                    <input 
+                      type="number" 
+                      required
+                      value={distributeForm.items[0]?.quantity || ''} 
+                      onChange={e => setDistributeForm({...distributeForm, items: [{ ...distributeForm.items[0], quantity: e.target.value }]})}
+                      className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-orange-500"
+                      placeholder="e.g., 5"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 block mb-2">Unit</label>
+                    <select 
+                      value={distributeForm.items[0]?.unit || 'L'} 
+                      onChange={e => setDistributeForm({...distributeForm, items: [{ ...distributeForm.items[0], unit: e.target.value }]})}
+                      className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-orange-500"
+                    >
+                      <option value="L">Liters (L)</option>
+                      <option value="ML">Milliliters (ML)</option>
+                      <option value="KG">Kilograms (KG)</option>
+                      <option value="G">Grams (G)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-slate-700 block mb-2">Notes (Optional)</label>
+                  <textarea 
+                    value={distributeForm.notes} 
+                    onChange={e => setDistributeForm({...distributeForm, notes: e.target.value})}
+                    className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none resize-none focus:border-orange-500"
+                    rows="2"
+                    placeholder="Distribution notes..."
+                  />
+                </div>
+
+                <button type="submit" className="w-full py-4 bg-orange-600 text-white rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-orange-700 flex items-center justify-center gap-2">
+                  <Send size={18} /> Distribute Stock
+                </button>
+              </form>
+            </SectionCard>
+
+            {/* Distribution History */}
+            <SectionCard title="Distribution History" icon={History} headerBg="bg-gradient-to-r from-slate-600 to-slate-500">
+              {distributions.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-slate-50">
+                        <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Date</th>
+                        <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Employee</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Quantity</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {distributions.slice(0, 10).map(dist => (
+                        <tr key={dist._id} className="border-b hover:bg-slate-50">
+                          <td className="py-3 px-4">{new Date(dist.createdAt).toLocaleDateString()}</td>
+                          <td className="py-3 px-4 font-medium">{dist.employeeId?.name || 'Unknown'}</td>
+                          <td className="py-3 px-4 text-right font-bold">{dist.totalQuantity} L</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-500">
+                  <Send size={48} className="mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-semibold">No distributions yet</p>
+                </div>
+              )}
             </SectionCard>
           </div>
         )}
@@ -1007,11 +1606,46 @@ const Inventory = () => {
         {activeTab === 'history' && (
           <div className="space-y-6">
             <SectionCard title="Transaction History" icon={History} headerBg="bg-gradient-to-r from-slate-600 to-slate-500">
-              <div className="text-center py-12 text-slate-500">
-                <History size={48} className="mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-semibold">Transaction History</p>
-                <p className="text-sm mt-2">No transaction history available</p>
-              </div>
+              {transactions.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-slate-50">
+                        <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Date</th>
+                        <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Type</th>
+                        <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Chemical</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Qty</th>
+                        <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {transactions.slice(0, 20).map(tx => (
+                        <tr key={tx._id} className="border-b hover:bg-slate-50">
+                          <td className="py-3 px-4">{new Date(tx.createdAt).toLocaleDateString()}</td>
+                          <td className="py-3 px-4">
+                            <Badge variant={
+                              tx.txnType === 'PURCHASE' ? 'success' :
+                              tx.txnType === 'TRANSFER_TO_BRANCH' ? 'info' :
+                              tx.txnType === 'USAGE' ? 'danger' :
+                              tx.txnType === 'RETURN' ? 'warning' : 'default'
+                            }>
+                              {tx.txnType || tx.type}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4 font-medium">{tx.chemicalId?.name || 'N/A'}</td>
+                          <td className="py-3 px-4 text-right font-bold">{tx.displayQuantity || tx.quantity} {tx.displayUnit || tx.unit || ''}</td>
+                          <td className="py-3 px-4 text-xs text-slate-500 truncate max-w-[150px]">{tx.notes || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-500">
+                  <History size={48} className="mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-semibold">No transactions yet</p>
+                </div>
+              )}
             </SectionCard>
           </div>
         )}

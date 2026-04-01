@@ -415,19 +415,28 @@ const CreateForm = () => {
       return api.post('/forms', payload);
     },
     onSuccess: (res) => {
-      toast.success(isEditing ? 'Form Updated' : 'Form Created Successfully');
       if (!isEditing && res.data.data?._id) {
         api.post(`/forms/${res.data.data._id}/submit`)
-          .then(() => {
-            toast.success('PDF sent to customer email');
+          .then((submitRes) => {
+            if (submitRes.data.autoAssigned) {
+              toast.success('Form submitted! Task assigned to you. Check My Tasks.');
+            } else {
+              toast.success('Form submitted successfully!');
+            }
+            queryClient.invalidateQueries(['forms']);
+            queryClient.invalidateQueries(['my-tasks']);
           })
           .catch((err) => {
-            console.warn('PDF email failed:', err);
-            toast.error('Form saved but email could not be sent');
+            console.warn('Submit error:', err);
+            toast.success('Form saved!');
+            queryClient.invalidateQueries(['forms']);
+            navigate('/forms');
           });
+      } else {
+        toast.success(isEditing ? 'Form Updated' : 'Form Created Successfully');
+        queryClient.invalidateQueries(['forms']);
+        navigate('/forms');
       }
-      queryClient.invalidateQueries(['forms']);
-      navigate('/forms');
     },
     onError: (err) => {
       toast.error(err.response?.data?.message || 'Error saving form');

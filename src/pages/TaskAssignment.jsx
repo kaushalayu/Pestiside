@@ -57,12 +57,13 @@ const TaskAssignment = () => {
       params.append('startDate', startDate);
       params.append('endDate', endDate);
       if (selectedBranch) params.append('branchId', selectedBranch);
-      if (selectedDate) params.append('date', selectedDate);
       
       const response = await api.get(`/task-assignments/unassigned-bookings?${params.toString()}`);
-      setUnassignedBookings(response.data.data);
+      setUnassignedBookings(response.data.data || []);
     } catch (error) {
-      toast.error('Error fetching bookings');
+      console.error('Error fetching bookings:', error);
+      toast.error(error.response?.data?.message || 'Error fetching bookings');
+      setUnassignedBookings([]);
     }
     setLoading(false);
   };

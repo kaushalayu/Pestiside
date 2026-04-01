@@ -165,34 +165,76 @@ const Logistics = () => {
   });
 
   const uploadPhoto = async (file) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    try {
-      const res = await api.post('/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      return res.data.data;
-    } catch (error) {
-      toast.error('Upload failed: ' + (error.response?.data?.message || error.message));
-      return null;
-    }
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const img = new Image();
+          img.onload = async () => {
+            const canvas = document.createElement('canvas');
+            const maxSize = 1200;
+            let width = img.width;
+            let height = img.height;
+            
+            if (width > height && width > maxSize) {
+              height = (height * maxSize) / width;
+              width = maxSize;
+            } else if (height > maxSize) {
+              width = (width * maxSize) / height;
+              height = maxSize;
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressed = canvas.toDataURL('image/jpeg', 0.7);
+            
+            try {
+              const res = await api.post('/upload', { file: compressed });
+              resolve(res.data.data);
+            } catch (error) {
+              toast.error('Upload failed: ' + (error.response?.data?.message || error.message));
+              resolve(null);
+            }
+          };
+          img.onerror = () => {
+            toast.error('Failed to process image');
+            resolve(null);
+          };
+          img.src = e.target.result;
+        } catch (error) {
+          toast.error('Upload failed: ' + error.message);
+          resolve(null);
+        }
+      };
+      reader.onerror = () => {
+        toast.error('Failed to read file');
+        resolve(null);
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
   const handleStartPhotoUpload = async (e) => {
     const file = e.target.files[0];
-    if (!file || !activeLog?._id) return;
+    if (!file) return;
     const url = await uploadPhoto(file);
     if (url) {
-      updateMutation.mutate({ id: activeLog._id, data: { startMeterPhoto: url } });
+      setTravelData({ ...travelData, startMeterPhoto: url });
+    } else {
+      setTravelData({ ...travelData, startMeterPhoto: null });
     }
   };
 
   const handleEndPhotoUpload = async (e) => {
     const file = e.target.files[0];
-    if (!file || !activeLog?._id) return;
+    if (!file) return;
     const url = await uploadPhoto(file);
     if (url) {
-      updateMutation.mutate({ id: activeLog._id, data: { endMeterPhoto: url } });
+      setTravelData({ ...travelData, endMeterPhoto: url });
+    } else {
+      setTravelData({ ...travelData, endMeterPhoto: null });
     }
   };
 
