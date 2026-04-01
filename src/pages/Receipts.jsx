@@ -14,15 +14,21 @@ const Receipts = () => {
   const { user } = useSelector(state => state.auth);
   const queryClient = useQueryClient();
 
-  const { data: receipts, isLoading } = useQuery({ queryKey: ['receipts'], queryFn: fetchReceipts });
+  const { data: receipts, isLoading } = useQuery({ 
+    queryKey: ['receipts'], 
+    queryFn: fetchReceipts,
+    staleTime: 60000,
+  });
   const { data: branches } = useQuery({
     queryKey: ['branches'],
     queryFn: fetchBranches,
-    enabled: user?.role === 'super_admin' || user?.role === 'branch_admin'
+    enabled: user?.role === 'super_admin' || user?.role === 'branch_admin',
+    staleTime: 300000,
   });
   const { data: forms } = useQuery({
     queryKey: ['forms-for-receipt'],
-    queryFn: fetchForms
+    queryFn: fetchForms,
+    staleTime: 60000,
   });
 
   // Calculate stats from receipts

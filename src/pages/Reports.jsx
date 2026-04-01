@@ -61,6 +61,7 @@ const Reports = () => {
       const res = await api.get(`/forms?startDate=${dateRangeFilter.startDate}&endDate=${dateRangeFilter.endDate}`);
       return res.data?.data || [];
     },
+    staleTime: 60000, // 1 minute
   });
 
   const { data: receipts = [] } = useQuery({
@@ -69,6 +70,7 @@ const Reports = () => {
       const res = await api.get(`/receipts?startDate=${dateRangeFilter.startDate}&endDate=${dateRangeFilter.endDate}`);
       return res.data?.data || [];
     },
+    staleTime: 60000,
   });
 
   const { data: expenses = [] } = useQuery({
@@ -77,6 +79,7 @@ const Reports = () => {
       const res = await api.get(`/expenses?startDate=${dateRangeFilter.startDate}&endDate=${dateRangeFilter.endDate}`);
       return res.data?.data || [];
     },
+    staleTime: 60000,
   });
 
   const { data: inventoryUsage = [] } = useQuery({
@@ -85,6 +88,7 @@ const Reports = () => {
       const res = await api.get('/employee-inventory/usage-history');
       return res.data?.data || [];
     },
+    staleTime: 120000, // 2 minutes
   });
 
   const { data: taskHistory = [] } = useQuery({
