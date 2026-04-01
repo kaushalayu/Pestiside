@@ -9,7 +9,7 @@ const MyTasks = () => {
   const { user } = useSelector((state) => state.auth);
 
   const [activeTab, setActiveTab] = useState('pending');
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [selectedDate, setSelectedDate] = useState(''); // Empty = show all tasks
   const [myTasks, setMyTasks] = useState([]);
   const [myHistory, setMyHistory] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -27,7 +27,10 @@ const MyTasks = () => {
       } else if (activeTab === 'accepted') {
         params.append('status', 'ACCEPTED');
       }
-      params.append('date', selectedDate);
+      // Only filter by date if a specific date is selected, otherwise show all
+      if (selectedDate) {
+        params.append('date', selectedDate);
+      }
       
       const response = await api.get(`/task-assignments/my-tasks?${params.toString()}`);
       setMyTasks(response.data.data);
