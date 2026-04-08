@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShieldCheck, Mail, Lock, MoveRight, Leaf } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, MoveRight, Leaf, Eye, EyeOff } from 'lucide-react';
 import api from '../lib/api';
 import { loginSuccess } from '../store/slices/authSlice';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -36,9 +37,9 @@ const Login = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-900 overflow-hidden font-sans">
+    <div className="flex min-h-screen bg-slate-900 overflow-x-hidden font-sans">
       
-      {/* Left Splash Image Pane */}
+      {/* Left Splash Image Pane - Hidden on mobile/tablet */}
       <motion.div 
         initial={{ opacity: 0, x: -50 }}
         animate={{ opacity: 1, x: 0 }}
@@ -74,7 +75,7 @@ const Login = () => {
       </motion.div>
 
       {/* Right Login Pane */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-16 relative bg-white shadow-[-20px_0_40px_rgba(0,0,0,0.4)] z-20 rounded-none lg:rounded-s-[3rem]">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-6 md:p-8 lg:p-16 relative bg-white shadow-[-20px_0_40px_rgba(0,0,0,0.4)] z-20 rounded-none lg:rounded-s-[3rem] overflow-y-auto">
          
          <motion.div 
             initial={{ opacity: 0, y: 30 }}
@@ -82,12 +83,18 @@ const Login = () => {
             transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
             className="w-full max-w-md"
          >
-            <div className="text-center lg:text-left mb-10">
-              <h3 className="text-3xl font-display font-bold text-slate-900 tracking-tight">Welcome Back</h3>
-              <p className="text-slate-500 mt-2 font-medium">Please enter your credentials to access the portal.</p>
+            {/* Mobile Logo */}
+            <div className="lg:hidden flex items-center justify-center gap-2 mb-6">
+              <img src="/logo.jpg" alt="SafeHome" className="h-10 w-auto object-contain" />
+              <h1 className="text-xl font-display font-bold text-slate-900">SafeHome</h1>
             </div>
 
-            <form onSubmit={handleLogin} className="space-y-5" autoComplete="off">
+            <div className="text-center lg:text-left mb-6 sm:mb-8 md:mb-10">
+              <h3 className="text-2xl sm:text-3xl font-display font-bold text-slate-900 tracking-tight">Welcome Back</h3>
+              <p className="text-slate-500 mt-1 sm:mt-2 font-medium text-sm sm:text-base">Please enter your credentials to access the portal.</p>
+            </div>
+
+            <form onSubmit={handleLogin} className="space-y-4 sm:space-y-5" autoComplete="off">
                
                <AnimatePresence>
                  {error && (
@@ -95,7 +102,7 @@ const Login = () => {
                      initial={{ opacity: 0, height: 0 }}
                      animate={{ opacity: 1, height: 'auto' }}
                      exit={{ opacity: 0, height: 0 }}
-                     className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium border border-red-100 flex items-center overflow-hidden"
+                     className="bg-red-50 text-red-600 p-3 sm:p-4 rounded-xl text-xs sm:text-sm font-medium border border-red-100 flex items-center overflow-hidden"
                    >
                      {error}
                    </motion.div>
@@ -103,11 +110,11 @@ const Login = () => {
                </AnimatePresence>
 
                {/* Email Input */}
-               <div className="flex flex-col gap-2.5">
-                  <label className="text-sm font-semibold text-slate-700 ml-1">Email Address</label>
+               <div className="flex flex-col gap-2">
+                  <label className="text-xs sm:text-sm font-semibold text-slate-700 ml-1">Email Address</label>
                   <div className="relative flex items-center">
-                    <div className="absolute left-0 pl-4 flex items-center pointer-events-none">
-                      <Mail className="text-slate-400 w-5 h-5" />
+                    <div className="absolute left-0 pl-3 sm:pl-4 flex items-center pointer-events-none">
+                      <Mail className="text-slate-400 w-4 h-4 sm:w-5 sm:h-5" />
                     </div>
                     <input 
                       type="email"
@@ -115,48 +122,65 @@ const Login = () => {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       autoComplete="off"
-                      className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-900 text-base placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all duration-200"
+                      className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-900 text-sm sm:text-base placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all duration-200"
                       placeholder="admin@safehome.com"
                     />
                   </div>
                </div>
 
                {/* Password Input */}
-               <div className="flex flex-col gap-2.5">
-                  <div className="flex items-center justify-between ml-1">
-                     <label className="text-sm font-semibold text-slate-700">Password</label>
-                      <a href="/forgot-password" className="text-sm font-semibold text-green-600 hover:text-green-500 transition-colors">Forgot password?</a>
-                  </div>
-                  <div className="relative flex items-center">
-                    <div className="absolute left-0 pl-4 flex items-center pointer-events-none">
-                      <Lock className="text-slate-400 w-5 h-5" />
-                    </div>
-                    <input 
-                      type="password"
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      autoComplete="new-password"
-                      className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-900 text-base placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all duration-200"
-                      placeholder="Enter your password"
-                    />
-                  </div>
-               </div>
+                <div className="flex flex-col gap-2">
+                   <div className="flex items-center justify-between ml-1">
+                      <label className="text-xs sm:text-sm font-semibold text-slate-700">Password</label>
+                       <a href="/forgot-password" className="text-[10px] sm:text-sm font-semibold text-green-600 hover:text-green-500 transition-colors">Forgot password?</a>
+                   </div>
+                   <div className="relative flex items-center">
+                     <div className="absolute left-0 pl-3 sm:pl-4 flex items-center pointer-events-none">
+                       <Lock className="text-slate-400 w-4 h-4 sm:w-5 sm:h-5" />
+                     </div>
+                     <input 
+                       type={showPassword ? 'text' : 'password'}
+                       required
+                       value={password}
+                       onChange={(e) => setPassword(e.target.value)}
+                       autoComplete="new-password"
+                       className="w-full pl-10 sm:pl-12 pr-12 py-3 sm:py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-slate-900 text-sm sm:text-base placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all duration-200"
+                       placeholder="Enter your password"
+                     />
+                     <button 
+                       type="button"
+                       onClick={() => setShowPassword(!showPassword)}
+                       className="absolute right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                     >
+                       {showPassword ? (
+                         <EyeOff className="w-4 h-4 sm:w-5 sm:h-5" />
+                       ) : (
+                         <Eye className="w-4 h-4 sm:w-5 sm:h-5" />
+                       )}
+                     </button>
+                   </div>
+                </div>
 
                {/* Submit Button */}
-               <div className="pt-2">
+               <div className="pt-1 sm:pt-2">
                  <button 
                     disabled={isLoading}
                     type="submit" 
-                    className="w-full py-4 px-6 rounded-xl bg-green-600 hover:bg-green-500 text-white font-semibold shadow-lg shadow-green-500/25 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between group text-base"
+                    className="w-full py-3 sm:py-4 px-4 sm:px-6 rounded-xl bg-green-600 hover:bg-green-500 text-white font-semibold shadow-lg shadow-green-500/25 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center sm:justify-between group text-sm sm:text-base"
                  >
                     <span className="tracking-wide">
                       {isLoading ? 'Authenticating...' : 'Sign In Securely'}
                     </span>
-                    {!isLoading && <MoveRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
+                    {!isLoading && <MoveRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform ml-2" />}
                  </button>
                </div>
             </form>
+
+            {/* Mobile Footer */}
+            <div className="lg:hidden flex items-center justify-center gap-2 mt-8 text-slate-400 text-xs font-medium">
+              <Leaf className="w-4 h-4 text-green-500" />
+              <span>Powered by Pestochem India Pvt Ltd.</span>
+            </div>
          </motion.div>
       </div>
     </div>

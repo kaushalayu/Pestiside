@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
+import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 import { Calendar, Users, UserCheck, Clock, CheckCircle, XCircle, ChevronRight, Filter, Eye } from 'lucide-react';
@@ -7,6 +8,7 @@ import { format, parseISO, isToday, isTomorrow, isThisWeek } from 'date-fns';
 
 const TaskAssignment = () => {
   const { user } = useSelector((state) => state.auth);
+  const queryClient = useQueryClient();
   const isSuperAdmin = user?.role === 'super_admin';
   const isBranchAdmin = user?.role === 'branch_admin';
 
@@ -17,10 +19,7 @@ const TaskAssignment = () => {
   const [selectedBranch, setSelectedBranch] = useState(isBranchAdmin ? user?.branchId?._id : '');
   const [filterStatus, setFilterStatus] = useState('UNASSIGNED');
 
-  const [unassignedBookings, setUnassignedBookings] = useState([]);
-  const [allAssignments, setAllAssignments] = useState([]);
   const [availableEmployees, setAvailableEmployees] = useState([]);
-  const [employeeWorkload, setEmployeeWorkload] = useState([]);
   const [branches, setBranches] = useState([]);
 
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -30,16 +29,13 @@ const TaskAssignment = () => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [assignmentNote, setAssignmentNote] = useState('');
 
-  const [loading, setLoading] = useState(false);
+  const [showWorkloadSidebar, setShowWorkloadSidebar] = useState(false);
 
   useEffect(() => {
     if (isSuperAdmin) {
       fetchBranches();
     }
-    fetchUnassignedBookings();
-    fetchAssignments();
-    fetchEmployeeWorkload();
-  }, [selectedDate, startDate, endDate, selectedBranch]);
+  }, [isSuperAdmin]);
 
   const fetchBranches = async () => {
     try {
@@ -50,121 +46,375 @@ const TaskAssignment = () => {
     }
   };
 
-  const fetchUnassignedBookings = async () => {
-    setLoading(true);
-    try {
+  const { data: unassignedData, isLoading: unassignedLoading, refetch: refetchUnassigned } = useQuery({
+    queryKey: ['unassigned-bookings', startDate, endDate, selectedBranch],
+    queryFn: async () => {
       const params = new URLSearchParams();
       params.append('startDate', startDate);
       params.append('endDate', endDate);
       if (selectedBranch) params.append('branchId', selectedBranch);
-      
       const response = await api.get(`/task-assignments/unassigned-bookings?${params.toString()}`);
-      setUnassignedBookings(response.data.data || []);
-    } catch (error) {
-      console.error('Error fetching bookings:', error);
-      toast.error(error.response?.data?.message || 'Error fetching bookings');
-      setUnassignedBookings([]);
-    }
-    setLoading(false);
-  };
+      return response.data.data || [];
+    },
+    staleTime: 5000,
+    refetchInterval: 10000
+  });
 
-  const fetchAssignments = async () => {
-    try {
+  const { data: assignmentsData, isLoading: assignmentsLoading, refetch: refetchAssignments } = useQuery({
+    queryKey: ['task-assignments', startDate, endDate, selectedBranch, filterStatus],
+    queryFn: async () => {
       const params = new URLSearchParams();
       params.append('startDate', startDate);
       params.append('endDate', endDate);
       if (selectedBranch) params.append('branchId', selectedBranch);
-      
+      if (filterStatus && filterStatus !== 'ALL') params.append('status', filterStatus);
       const response = await api.get(`/task-assignments?${params.toString()}`);
-      setAllAssignments(response.data.data);
-    } catch (error) {
-      console.error('Error fetching assignments:', error);
-    }
-  };
+      return response.data.data || [];
+    },
+    staleTime: 5000,
+    refetchInterval: 10000
+  });
 
-  const fetchEmployeeWorkload = async () => {
-    try {
+  const { data: workloadData, refetch: refetchWorkload } = useQuery({
+    queryKey: ['employee-workload', startDate, endDate, selectedBranch, selectedDate],
+    queryFn: async () => {
       const params = new URLSearchParams();
       params.append('startDate', startDate);
       params.append('endDate', endDate);
       if (selectedBranch) params.append('branchId', selectedBranch);
       if (selectedDate) params.append('date', selectedDate);
+      const response = await api.get(`/task-assignments/employee-workload?${params.toString()}`);
+      return response.data.data || [];
+    },
+    staleTime: 5000,
+    refetchInterval: 10000
+  });
+
+  const unassignedBookings = unassignedData || [];
+  const allAssignments = assignmentsData || [];
+  const employeeWorkload = workloadData || [];
+
+  const fetchAllEmployeesWithWorkload = async () => {
+    try {
+      const params = new URLSearchParams();
+      params.append('startDate', startDate);
+      params.append('endDate', endDate);
+      if (selectedBranch) params.append('branchId', selectedBranch);
       
       const response = await api.get(`/task-assignments/employee-workload?${params.toString()}`);
-      setEmployeeWorkload(response.data.data);
+      return response.data.data || [];
     } catch (error) {
-      console.error('Error fetching workload:', error);
+      console.error('Error fetching all employees:', error);
+      return [];
     }
   };
 
   const fetchAvailableEmployees = async (date, branchId) => {
     try {
+      if (!date) {
+        console.error('fetchAvailableEmployees called without date');
+        return;
+      }
+      
       const params = new URLSearchParams();
       params.append('date', date);
       if (branchId) params.append('branchId', branchId);
       
       const response = await api.get(`/task-assignments/available-employees?${params.toString()}`);
-      setAvailableEmployees(response.data.data);
+      const allWorkload = await fetchAllEmployeesWithWorkload();
+      const workloadMap = {};
+      allWorkload.forEach(w => { workloadMap[w.employee._id] = w; });
+      
+      const employeesWithWorkload = response.data.data.map(emp => ({
+        ...emp,
+        totalTasks: workloadMap[emp._id]?.totalTasks || 0,
+        workloadData: workloadMap[emp._id] || null
+      }));
+      
+      employeesWithWorkload.sort((a, b) => {
+        if (a.isAvailable && !b.isAvailable) return -1;
+        if (!a.isAvailable && b.isAvailable) return 1;
+        return a.totalTasks - b.totalTasks;
+      });
+      
+      setAvailableEmployees(employeesWithWorkload);
     } catch (error) {
       toast.error('Error fetching employees');
     }
   };
 
-  const handleAssignTask = async () => {
-    if (!selectedBooking || !selectedEmployee) {
-      toast.error('Please select an employee');
-      return;
-    }
-
-    try {
-      await api.post('/task-assignments', {
-        serviceFormId: selectedBooking._id,
-        assignedTo: selectedEmployee._id,
-        scheduledDate: selectedBooking.schedule?.date || selectedDate,
-        notes: assignmentNote
+  const assignTaskMutation = useMutation({
+    mutationFn: (data) => api.post('/task-assignments', data),
+    onMutate: async (data) => {
+      await queryClient.cancelQueries({ queryKey: ['unassigned-bookings'] });
+      await queryClient.cancelQueries({ queryKey: ['task-assignments'] });
+      await queryClient.cancelQueries({ queryKey: ['employee-workload'] });
+      const previousUnassigned = queryClient.getQueryData(['unassigned-bookings']);
+      const previousAssignments = queryClient.getQueryData(['task-assignments']);
+      const previousWorkload = queryClient.getQueryData(['employee-workload']);
+      
+      // Optimistic: Remove from unassigned list
+      queryClient.setQueryData(['unassigned-bookings'], (old) => {
+        if (!old) return [];
+        return old.filter(b => b._id !== data.serviceFormId);
       });
       
-      toast.success('Task assigned successfully');
+      return { previousUnassigned, previousAssignments, previousWorkload };
+    },
+    onError: (err, variables, context) => {
+      queryClient.setQueryData(['unassigned-bookings'], context.previousUnassigned);
+      queryClient.setQueryData(['task-assignments'], context.previousAssignments);
+      queryClient.setQueryData(['employee-workload'], context.previousWorkload);
+      
+      // Get the actual error message from backend
+      const errorData = err.response?.data;
+      let errorMsg = 'Error assigning task';
+      if (errorData) {
+        if (typeof errorData === 'string') {
+          errorMsg = errorData;
+        } else if (errorData.message) {
+          errorMsg = errorData.message;
+        } else if (errorData.error) {
+          errorMsg = errorData.error;
+        } else {
+          errorMsg = JSON.stringify(errorData);
+        }
+      }
+      
+      toast.error(errorMsg);
+      console.error('Task assignment error:', errorData);
+      console.error('Full error:', err);
+    },
+    onSuccess: (data, variables) => {
+      toast.success('Task assigned successfully! Request sent to technician.');
+      
+      // Optimistic: Add to assignments list
+      queryClient.setQueryData(['task-assignments'], (old) => {
+        if (!old) return [data.data.data];
+        return [data.data.data, ...old];
+      });
+      
       setShowAssignModal(false);
       setSelectedBooking(null);
       setSelectedEmployee(null);
       setAssignmentNote('');
-      fetchUnassignedBookings();
-      fetchAssignments();
-      fetchEmployeeWorkload();
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Error assigning task');
+      queryClient.invalidateQueries({ queryKey: ['unassigned-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['task-assignments'] });
+      queryClient.invalidateQueries({ queryKey: ['employee-workload'] });
+      queryClient.invalidateQueries({ queryKey: ['my-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['forms'] });
+      queryClient.invalidateQueries({ queryKey: ['forms-pending-payment'] });
     }
+  });
+
+  const cancelAssignmentMutation = useMutation({
+    mutationFn: (assignmentId) => api.patch(`/task-assignments/${assignmentId}/cancel`),
+    onMutate: async (assignmentId) => {
+      await queryClient.cancelQueries({ queryKey: ['unassigned-bookings'] });
+      await queryClient.cancelQueries({ queryKey: ['task-assignments'] });
+      const previousUnassigned = queryClient.getQueryData(['unassigned-bookings']);
+      const previousAssignments = queryClient.getQueryData(['task-assignments']);
+      // Optimistic: Remove from assignments
+      queryClient.setQueryData(['task-assignments'], (old) => {
+        if (!old) return [];
+        return old.filter(a => a._id !== assignmentId);
+      });
+      return { previousUnassigned, previousAssignments };
+    },
+    onError: (err, assignmentId, context) => {
+      queryClient.setQueryData(['unassigned-bookings'], context.previousUnassigned);
+      queryClient.setQueryData(['task-assignments'], context.previousAssignments);
+      toast.error('Error cancelling assignment');
+    },
+    onSuccess: () => {
+      toast.success('Assignment cancelled');
+      queryClient.invalidateQueries({ queryKey: ['unassigned-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['task-assignments'] });
+      queryClient.invalidateQueries({ queryKey: ['employee-workload'] });
+      queryClient.invalidateQueries({ queryKey: ['my-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['forms'] });
+      queryClient.invalidateQueries({ queryKey: ['forms-pending-payment'] });
+    }
+  });
+
+  const handleAssignTask = () => {
+    if (!selectedBooking) {
+      toast.error('Please select a booking');
+      return;
+    }
+    
+    if (!selectedEmployee || !selectedEmployee._id) {
+      toast.error('Please select an employee');
+      return;
+    }
+    
+    // Get the ServiceForm ID - could be nested in serviceFormId or directly on selectedBooking
+    const hasServiceFormIdNested = selectedBooking.serviceFormId && (
+      typeof selectedBooking.serviceFormId === 'object' 
+        ? selectedBooking.serviceFormId._id 
+        : selectedBooking.serviceFormId
+    );
+    
+    const serviceFormId = hasServiceFormIdNested 
+      ? (typeof selectedBooking.serviceFormId === 'object' ? selectedBooking.serviceFormId._id : selectedBooking.serviceFormId)
+      : selectedBooking._id; // selectedBooking IS the ServiceForm
+    
+    if (!serviceFormId) {
+      toast.error('Invalid booking data. Please refresh and try again.');
+      console.error('ServiceFormId missing:', selectedBooking);
+      return;
+    }
+    
+    // Get the ServiceForm data - could be nested or directly on selectedBooking
+    const serviceFormData = hasServiceFormIdNested 
+      ? (typeof selectedBooking.serviceFormId === 'object' ? selectedBooking.serviceFormId : null)
+      : selectedBooking; // selectedBooking IS the ServiceForm
+    
+    // Schedule date can come from:
+    // 1. ServiceForm's schedule.date (if populated)
+    // 2. TaskAssignment's scheduledDate field
+    // 3. Fallback to selectedDate
+    let scheduleDate = 
+      (serviceFormData?.schedule?.date) || 
+      (serviceFormData?.schedule?.scheduledDate) || 
+      selectedBooking.scheduledDate || 
+      selectedDate;
+    
+    if (!scheduleDate) {
+      toast.error('Schedule date is missing. Please set a schedule date.');
+      return;
+    }
+    
+    // Parse and format the date properly
+    let finalDate;
+    try {
+      // If it's already a valid ISO string or YYYY-MM-DD, use it directly
+      if (typeof scheduleDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(scheduleDate)) {
+        finalDate = scheduleDate.split('T')[0];
+      } 
+      // If it's a Date object or string, convert to proper format
+      else {
+        const dateObj = new Date(scheduleDate);
+        if (isNaN(dateObj.getTime())) {
+          // Try parsing from selectedDate
+          finalDate = selectedDate;
+        } else {
+          finalDate = dateObj.toISOString().split('T')[0];
+        }
+      }
+    } catch (e) {
+      finalDate = selectedDate;
+    }
+    
+    if (!finalDate) {
+      toast.error('Could not determine schedule date.');
+      return;
+    }
+    
+    // The actual ServiceForm ID
+    const actualServiceFormId = serviceFormData?._id || selectedBooking.serviceFormId;
+    
+    if (!actualServiceFormId) {
+      toast.error('Invalid booking data. Service Form ID not found.');
+      return;
+    }
+    
+    const payload = {
+      serviceFormId: actualServiceFormId,
+      assignedTo: selectedEmployee._id,
+      scheduledDate: finalDate,
+      notes: assignmentNote
+    };
+    
+    assignTaskMutation.mutate(payload);
   };
 
-  const handleCancelAssignment = async (assignmentId) => {
+  const handleCancelAssignment = (assignmentId) => {
     if (!confirm('Are you sure you want to cancel this assignment?')) return;
-    
-    try {
-      await api.patch(`/task-assignments/${assignmentId}/cancel`);
-      toast.success('Assignment cancelled');
-      fetchUnassignedBookings();
-      fetchAssignments();
-    } catch (error) {
-      toast.error('Error cancelling assignment');
-    }
+    cancelAssignmentMutation.mutate(assignmentId);
   };
 
   const openAssignModal = (booking) => {
     setSelectedBooking(booking);
-    setSelectedDate(booking.schedule?.date ? format(parseISO(booking.schedule.date), 'yyyy-MM-dd') : selectedDate);
-    fetchAvailableEmployees(
-      booking.schedule?.date ? format(parseISO(booking.schedule.date), 'yyyy-MM-dd') : selectedDate,
-      booking.branchId?._id || selectedBranch
+    
+    // Get the ServiceForm data - could be nested in serviceFormId or directly on booking
+    const hasServiceFormIdNested = booking.serviceFormId && (
+      typeof booking.serviceFormId === 'object' 
+        ? booking.serviceFormId._id 
+        : booking.serviceFormId
     );
+    
+    // ServiceForm data is either nested or booking IS the ServiceForm
+    const serviceFormData = hasServiceFormIdNested 
+      ? (typeof booking.serviceFormId === 'object' ? booking.serviceFormId : null)
+      : booking; // booking IS the ServiceForm
+    
+    // Schedule date can come from:
+    // 1. ServiceForm's schedule.date (if populated)
+    // 2. TaskAssignment's scheduledDate field
+    // 3. Fallback to selectedDate
+    let scheduleDate = 
+      (serviceFormData?.schedule?.date) || 
+      (serviceFormData?.schedule?.scheduledDate) || 
+      booking.scheduledDate || 
+      selectedDate;
+    
+    // Parse and format the date properly
+    let parsedDate = selectedDate;
+    try {
+      if (scheduleDate) {
+        // If it's already a valid ISO string or YYYY-MM-DD, use it directly
+        if (typeof scheduleDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(scheduleDate)) {
+          parsedDate = scheduleDate.split('T')[0];
+        } 
+        // Try to parse as Date
+        else {
+          const dateObj = new Date(scheduleDate);
+          if (!isNaN(dateObj.getTime())) {
+            parsedDate = format(dateObj, 'yyyy-MM-dd');
+          }
+        }
+      }
+    } catch (e) {
+      parsedDate = selectedDate;
+    }
+    setSelectedDate(parsedDate);
+    
+    const branchId = serviceFormData?.branchId?._id || booking?.branchId?._id || booking?.branchId;
+    fetchAvailableEmployees(parsedDate, branchId || selectedBranch);
     setShowAssignModal(true);
   };
 
+  const getEmployeeStatusColor = (emp) => {
+    if (emp.isAvailable && emp.totalTasks === 0) return 'bg-green-500';
+    if (emp.totalTasks <= 3) return 'bg-yellow-500';
+    if (emp.totalTasks <= 6) return 'bg-orange-500';
+    return 'bg-red-500';
+  };
+
+  const getEmployeeStatusText = (emp) => {
+    if (emp.isAvailable && emp.totalTasks === 0) return 'Free';
+    if (emp.totalTasks === 0) return 'Available';
+    if (emp.totalTasks <= 3) return 'Light Load';
+    if (emp.totalTasks <= 6) return 'Moderate';
+    return 'Heavy Load';
+  };
+
   const formatDateLabel = (dateStr) => {
-    const date = parseISO(dateStr);
-    if (isToday(date)) return 'Today';
-    if (isTomorrow(date)) return 'Tomorrow';
-    return format(date, 'dd MMM');
+    if (!dateStr) return '-';
+    try {
+      const date = parseISO(String(dateStr));
+      if (isNaN(date.getTime())) return '-';
+      if (isToday(date)) return 'Today';
+      if (isTomorrow(date)) return 'Tomorrow';
+      return format(date, 'dd MMM');
+    } catch (e) {
+      return '-';
+    }
   };
 
   const getStatusBadge = (status) => {
@@ -183,10 +433,16 @@ const TaskAssignment = () => {
   };
 
   const getDateStatus = (dateStr) => {
-    const date = parseISO(dateStr);
-    if (isToday(date)) return 'bg-green-500';
-    if (isTomorrow(date)) return 'bg-blue-500';
-    if (isThisWeek(date)) return 'bg-yellow-500';
+    if (!dateStr) return 'bg-gray-500';
+    try {
+      const date = parseISO(String(dateStr));
+      if (isNaN(date.getTime())) return 'bg-gray-500';
+      if (isToday(date)) return 'bg-green-500';
+      if (isTomorrow(date)) return 'bg-blue-500';
+      if (isThisWeek(date)) return 'bg-yellow-500';
+    } catch (e) {
+      return 'bg-gray-500';
+    }
     return 'bg-gray-500';
   };
 
@@ -246,8 +502,8 @@ const TaskAssignment = () => {
           className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
         >
           <option value="UNASSIGNED">Unassigned</option>
+          <option value="PENDING">Pending (Requests)</option>
           <option value="ASSIGNED">Assigned</option>
-          <option value="ACCEPTED">Accepted</option>
           <option value="COMPLETED">Completed</option>
           <option value="ALL">All</option>
         </select>
@@ -283,7 +539,7 @@ const TaskAssignment = () => {
         <button
           onClick={() => {
             setActiveTab('employees');
-            fetchEmployeeWorkload();
+            refetchWorkload();
           }}
           className={`px-4 py-2 rounded-lg font-medium ${
             activeTab === 'employees'
@@ -298,12 +554,60 @@ const TaskAssignment = () => {
         </button>
       </div>
 
-      {loading ? (
+      {unassignedLoading || assignmentsLoading ? (
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900"></div>
         </div>
       ) : activeTab === 'bookings' ? (
-        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+        <>
+          {employeeWorkload.length > 0 && (
+            <div className="mb-4 bg-white rounded-xl shadow-sm border p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  Employee Workload Summary
+                </h3>
+                <button
+                  onClick={() => setActiveTab('employees')}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  View All →
+                </button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                {employeeWorkload.slice(0, 6).map((item) => (
+                  <div
+                    key={item.employee._id}
+                    className={`p-3 rounded-lg border-2 ${
+                      item.totalTasks === 0 ? 'border-green-200 bg-green-50' : 
+                      item.totalTasks <= 3 ? 'border-yellow-200 bg-yellow-50' : 
+                      item.totalTasks <= 6 ? 'border-orange-200 bg-orange-50' : 'border-red-200 bg-red-50'
+                    }`}
+                  >
+                    <div className="text-xs font-semibold text-slate-700 truncate">{item.employee.name}</div>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className={`text-lg font-bold ${
+                        item.totalTasks === 0 ? 'text-green-600' : 
+                        item.totalTasks <= 3 ? 'text-yellow-600' : 
+                        item.totalTasks <= 6 ? 'text-orange-600' : 'text-red-600'
+                      }`}>
+                        {item.totalTasks}
+                      </span>
+                      <span className={`w-2 h-2 rounded-full ${
+                        item.totalTasks === 0 ? 'bg-green-500' : 
+                        item.totalTasks <= 3 ? 'bg-yellow-500' : 
+                        item.totalTasks <= 6 ? 'bg-orange-500' : 'bg-red-500'
+                      }`}></span>
+                    </div>
+                    <div className="text-[10px] text-slate-500">
+                      {item.totalTasks === 0 ? 'FREE' : 'tasks'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-50 border-b">
@@ -326,38 +630,42 @@ const TaskAssignment = () => {
                     </td>
                   </tr>
                 ) : (
-                  unassignedBookings.map((booking) => (
-                    <tr key={booking._id} className="hover:bg-slate-50">
+                  unassignedBookings.map((task) => (
+                    <tr key={task._id} className="hover:bg-slate-50">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${getDateStatus(booking.schedule?.date)}`}></div>
+                          <div className={`w-2 h-2 rounded-full ${getDateStatus(task.scheduledDate)}`}></div>
                           <span className="font-medium">
-                            {booking.schedule?.date ? formatDateLabel(booking.schedule.date) : '-'}
+                            {task.scheduledDate ? formatDateLabel(task.scheduledDate) : '-'}
                           </span>
                         </div>
                         <div className="text-xs text-slate-500">
-                          {booking.schedule?.date ? format(parseISO(booking.schedule.date), 'dd/MM/yyyy') : '-'}
+                          {task.scheduledDate ? (() => {
+                            try {
+                              const d = parseISO(task.scheduledDate);
+                              return isNaN(d.getTime()) ? '-' : format(d, 'dd/MM/yyyy');
+                            } catch { return '-'; }
+                          })() : '-'}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm font-mono">{booking.orderNo}</td>
+                      <td className="px-4 py-3 text-sm font-mono">{(task.serviceFormId || {}).orderNo || '-'}</td>
                       <td className="px-4 py-3">
-                        <div className="font-medium">{booking.customerId?.name || booking.customer?.name}</div>
-                        <div className="text-xs text-slate-500">{booking.customerId?.phone || booking.customer?.phone}</div>
+                        <div className="font-medium">{(task.serviceFormId?.customer?.name || task.serviceFormId?.customerId?.name || '-')}</div>
+                        <div className="text-xs text-slate-500">{(task.serviceFormId?.customer?.phone || task.serviceFormId?.customerId?.phone || '-')}</div>
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        <div>{booking.serviceType}</div>
-                        <div className="text-xs text-slate-500">{booking.serviceCategory}</div>
+                        <div>{(task.serviceFormId?.serviceType || '-')}</div>
+                        <div className="text-xs text-slate-500">{(task.serviceFormId?.serviceCategory || '-')}</div>
                       </td>
-                      <td className="px-4 py-3 text-sm">{booking.branchId?.branchName}</td>
-                      <td className="px-4 py-3 text-sm">{booking.schedule?.time || '-'}</td>
+                      <td className="px-4 py-3 text-sm">{task.branchId?.branchName || task.serviceFormId?.branchId?.branchName || '-'}</td>
                       <td className="px-4 py-3 text-right font-medium">
-                        ₹{booking.pricing?.finalAmount?.toLocaleString() || 0}
+                        ₹{task.serviceFormId?.pricing?.finalAmount?.toLocaleString() || 0}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => {
-                              setSelectedBooking(booking);
+                              setSelectedBooking(task.serviceFormId || {});
                               setShowBookingDetailModal(true);
                             }}
                             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
@@ -366,7 +674,7 @@ const TaskAssignment = () => {
                             <Eye className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => openAssignModal(booking)}
+                            onClick={() => openAssignModal(task)}
                             className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 flex items-center gap-1"
                           >
                             <UserCheck className="w-4 h-4" />
@@ -381,6 +689,7 @@ const TaskAssignment = () => {
             </table>
           </div>
         </div>
+        </>
       ) : activeTab === 'assignments' ? (
         <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
           <div className="overflow-x-auto">
@@ -404,22 +713,27 @@ const TaskAssignment = () => {
                     </td>
                   </tr>
                 ) : (
-                  allAssignments.map((item) => {
-                    const assignment = item.assignments?.[0] || {};
+                  allAssignments.map((assignment) => {
+                    const serviceForm = assignment.serviceFormId || {};
                     return (
-                      <tr key={item._id} className="hover:bg-slate-50">
+                      <tr key={assignment._id} className="hover:bg-slate-50">
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${getDateStatus(item.schedule?.date)}`}></div>
+                            <div className={`w-2 h-2 rounded-full ${getDateStatus(assignment.scheduledDate)}`}></div>
                             <span className="font-medium">
-                              {item.schedule?.date ? formatDateLabel(item.schedule.date) : '-'}
+                              {assignment.scheduledDate ? formatDateLabel(assignment.scheduledDate) : '-'}
                             </span>
                           </div>
+                          {assignment.scheduledDate && (
+                            <div className="text-xs text-slate-500">
+                              {format(new Date(assignment.scheduledDate), 'dd/MM/yyyy')}
+                            </div>
+                          )}
                         </td>
-                        <td className="px-4 py-3 text-sm font-mono">{item.orderNo}</td>
+                        <td className="px-4 py-3 text-sm font-mono">{serviceForm.orderNo || '-'}</td>
                         <td className="px-4 py-3">
-                          <div className="font-medium">{item.customerId?.name}</div>
-                          <div className="text-xs text-slate-500">{item.customerId?.phone}</div>
+                          <div className="font-medium">{serviceForm.customerId?.name || serviceForm.customer?.name || '-'}</div>
+                          <div className="text-xs text-slate-500">{serviceForm.customerId?.phone || serviceForm.customer?.phone || '-'}</div>
                         </td>
                         <td className="px-4 py-3">
                           {assignment.assignedTo ? (
@@ -434,12 +748,12 @@ const TaskAssignment = () => {
                         <td className="px-4 py-3">
                           {assignment.status ? getStatusBadge(assignment.status) : '-'}
                         </td>
-                        <td className="px-4 py-3 text-sm">{item.branchId?.branchName}</td>
+                        <td className="px-4 py-3 text-sm">{serviceForm.branchId?.branchName || assignment.branchId?.branchName || '-'}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-center gap-2">
                             <button
                               onClick={() => {
-                                setSelectedBooking(item);
+                                setSelectedBooking(serviceForm);
                                 setShowBookingDetailModal(true);
                               }}
                               className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
@@ -449,7 +763,8 @@ const TaskAssignment = () => {
                             {['PENDING', 'ASSIGNED'].includes(assignment.status) && (
                               <button
                                 onClick={() => handleCancelAssignment(assignment._id)}
-                                className="px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700"
+                                disabled={cancelAssignmentMutation.isPending}
+                                className="px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:opacity-50"
                               >
                                 Cancel
                               </button>
@@ -465,35 +780,55 @@ const TaskAssignment = () => {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {employeeWorkload.map((item) => (
             <div
               key={item.employee._id}
-              className="bg-white rounded-xl shadow-sm border p-4 hover:shadow-md transition-shadow"
+              className="bg-white rounded-xl shadow-sm border p-4 hover:shadow-md transition-shadow relative overflow-hidden"
             >
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-green-500 via-yellow-500 to-red-500"></div>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center">
-                    <Users className="w-6 h-6 text-slate-400" />
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                    item.totalTasks === 0 ? 'bg-green-100' : 
+                    item.totalTasks <= 3 ? 'bg-yellow-100' : 
+                    item.totalTasks <= 6 ? 'bg-orange-100' : 'bg-red-100'
+                  }`}>
+                    <Users className={`w-6 h-6 ${
+                      item.totalTasks === 0 ? 'text-green-600' : 
+                      item.totalTasks <= 3 ? 'text-yellow-600' : 
+                      item.totalTasks <= 6 ? 'text-orange-600' : 'text-red-600'
+                    }`} />
                   </div>
                   <div>
                     <div className="font-semibold">{item.employee.name}</div>
                     <div className="text-xs text-slate-500">{item.employee.employeeId}</div>
                   </div>
                 </div>
+                <div className={`px-2 py-1 rounded-full text-xs font-bold ${
+                  item.totalTasks === 0 ? 'bg-green-100 text-green-700' : 
+                  item.totalTasks <= 3 ? 'bg-yellow-100 text-yellow-700' : 
+                  item.totalTasks <= 6 ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'
+                }`}>
+                  {item.totalTasks === 0 ? 'FREE' : `${item.totalTasks} Tasks`}
+                </div>
               </div>
-              <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="grid grid-cols-4 gap-2 text-center">
                 <div className="bg-slate-50 rounded-lg p-2">
-                  <div className="text-2xl font-bold text-slate-900">{item.totalTasks}</div>
-                  <div className="text-xs text-slate-500">Total</div>
+                  <div className="text-xl font-bold text-slate-900">{item.totalTasks}</div>
+                  <div className="text-[10px] text-slate-500">Total</div>
                 </div>
                 <div className="bg-yellow-50 rounded-lg p-2">
-                  <div className="text-2xl font-bold text-yellow-600">{item.pending}</div>
-                  <div className="text-xs text-slate-500">Pending</div>
+                  <div className="text-xl font-bold text-yellow-600">{item.pending}</div>
+                  <div className="text-[10px] text-slate-500">Pending</div>
+                </div>
+                <div className="bg-blue-50 rounded-lg p-2">
+                  <div className="text-xl font-bold text-blue-600">{item.assigned}</div>
+                  <div className="text-[10px] text-slate-500">Assigned</div>
                 </div>
                 <div className="bg-green-50 rounded-lg p-2">
-                  <div className="text-2xl font-bold text-green-600">{item.accepted}</div>
-                  <div className="text-xs text-slate-500">Active</div>
+                  <div className="text-xl font-bold text-green-600">{item.accepted}</div>
+                  <div className="text-[10px] text-slate-500">Active</div>
                 </div>
               </div>
             </div>
@@ -508,47 +843,73 @@ const TaskAssignment = () => {
 
       {showAssignModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b">
-              <h2 className="text-xl font-bold">Assign Task</h2>
-              <p className="text-sm text-slate-500 mt-1">
-                Assign to: {selectedBooking?.customerId?.name || selectedBooking?.customer?.name}
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-6 border-b bg-gradient-to-r from-blue-600 to-blue-500">
+              <h2 className="text-xl font-bold text-white">Assign Task</h2>
+              <p className="text-sm text-blue-100 mt-1">
+                Customer: {selectedBooking?.customerId?.name || selectedBooking?.customer?.name} • 
+                {selectedBooking?.serviceType} • ₹{selectedBooking?.pricing?.finalAmount?.toLocaleString() || 0}
               </p>
             </div>
-            <div className="p-6">
+            <div className="p-6 flex-1 overflow-y-auto">
               <div className="mb-4">
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Select Employee
+                <label className="block text-sm font-medium text-slate-700 mb-3">
+                  Select Employee - Showing employees by workload (Free employees first)
                 </label>
-                <div className="space-y-2 max-h-64 overflow-y-auto">
+                <div className="space-y-2 max-h-80 overflow-y-auto">
                   {availableEmployees.length === 0 ? (
-                    <p className="text-slate-500 text-center py-4">No employees available</p>
+                    <p className="text-slate-500 text-center py-8">No employees available</p>
                   ) : (
                     availableEmployees.map((emp) => (
                       <div
                         key={emp._id}
                         onClick={() => setSelectedEmployee(emp)}
-                        className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                        className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${
                           selectedEmployee?._id === emp._id
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'hover:border-slate-300'
-                        } ${!emp.isAvailable ? 'opacity-50' : ''}`}
+                            ? 'border-blue-500 bg-blue-50 shadow-md'
+                            : 'hover:border-slate-300 hover:bg-slate-50'
+                        }`}
                       >
                         <div className="flex items-center justify-between">
-                          <div>
-                            <div className="font-medium">{emp.name}</div>
-                            <div className="text-xs text-slate-500">
-                              {emp.employeeId} • {emp.branchId?.branchName}
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                              emp.totalTasks === 0 ? 'bg-green-100' : 
+                              emp.totalTasks <= 3 ? 'bg-yellow-100' : 
+                              emp.totalTasks <= 6 ? 'bg-orange-100' : 'bg-red-100'
+                            }`}>
+                              <Users className={`w-5 h-5 ${
+                                emp.totalTasks === 0 ? 'text-green-600' : 
+                                emp.totalTasks <= 3 ? 'text-yellow-600' : 
+                                emp.totalTasks <= 6 ? 'text-orange-600' : 'text-red-600'
+                              }`} />
+                            </div>
+                            <div>
+                              <div className="font-semibold">{emp.name}</div>
+                              <div className="text-xs text-slate-500">
+                                {emp.employeeId} • {emp.branchId?.branchName}
+                              </div>
                             </div>
                           </div>
-                          <div className="text-right">
-                            {emp.isAvailable ? (
-                              <span className="text-xs text-green-600 font-medium">Available</span>
-                            ) : (
-                              <span className="text-xs text-slate-500">
-                                {emp.currentTasks} tasks
-                              </span>
-                            )}
+                          <div className="flex items-center gap-3">
+                            <div className="text-right">
+                              <div className={`text-xs font-bold ${
+                                emp.totalTasks === 0 ? 'text-green-600' : 
+                                emp.totalTasks <= 3 ? 'text-yellow-600' : 
+                                emp.totalTasks <= 6 ? 'text-orange-600' : 'text-red-600'
+                              }`}>
+                                {emp.totalTasks} Tasks
+                              </div>
+                              <div className="text-[10px] text-slate-500">
+                                {emp.totalTasks === 0 ? 'Free' : 
+                                  emp.totalTasks <= 3 ? 'Light' : 
+                                  emp.totalTasks <= 6 ? 'Moderate' : 'Heavy'}
+                              </div>
+                            </div>
+                            <div className={`w-3 h-3 rounded-full ${
+                              emp.totalTasks === 0 ? 'bg-green-500' : 
+                              emp.totalTasks <= 3 ? 'bg-yellow-500' : 
+                              emp.totalTasks <= 6 ? 'bg-orange-500' : 'bg-red-500'
+                            }`}></div>
                           </div>
                         </div>
                       </div>
@@ -568,6 +929,30 @@ const TaskAssignment = () => {
                   placeholder="Add any notes for the employee..."
                 />
               </div>
+              {selectedEmployee && (
+                <div className="mb-4 p-4 bg-blue-50 rounded-xl border border-blue-200">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      selectedEmployee.totalTasks === 0 ? 'bg-green-100' : 
+                      selectedEmployee.totalTasks <= 3 ? 'bg-yellow-100' : 
+                      selectedEmployee.totalTasks <= 6 ? 'bg-orange-100' : 'bg-red-100'
+                    }`}>
+                      <Users className={`w-5 h-5 ${
+                        selectedEmployee.totalTasks === 0 ? 'text-green-600' : 
+                        selectedEmployee.totalTasks <= 3 ? 'text-yellow-600' : 
+                        selectedEmployee.totalTasks <= 6 ? 'text-orange-600' : 'text-red-600'
+                      }`} />
+                    </div>
+                    <div>
+                      <div className="font-semibold">{selectedEmployee.name}</div>
+                      <div className="text-sm text-blue-700">
+                        Current Workload: <span className="font-bold">{selectedEmployee.totalTasks} tasks</span>
+                        {selectedEmployee.totalTasks === 0 ? ' - Employee is FREE' : ''}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="flex gap-3">
                 <button
                   onClick={() => {
@@ -575,16 +960,16 @@ const TaskAssignment = () => {
                     setSelectedBooking(null);
                     setSelectedEmployee(null);
                   }}
-                  className="flex-1 px-4 py-2 border rounded-lg hover:bg-slate-50"
+                  className="flex-1 px-4 py-3 border rounded-lg hover:bg-slate-50 font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleAssignTask}
-                  disabled={!selectedEmployee}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  disabled={!selectedEmployee || assignTaskMutation.isPending}
+                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
                 >
-                  Assign Task
+                  {assignTaskMutation.isPending ? 'Assigning...' : 'Assign Task'}
                 </button>
               </div>
             </div>
@@ -623,9 +1008,16 @@ const TaskAssignment = () => {
                 <div>
                   <h3 className="text-sm font-medium text-slate-500">Schedule</h3>
                   <p className="font-semibold">
-                    {selectedBooking.schedule?.date ? format(parseISO(selectedBooking.schedule.date), 'dd MMM yyyy') : '-'}
+                    {selectedBooking.schedule?.date ? (() => {
+                      try {
+                        const date = parseISO(selectedBooking.schedule.date);
+                        return isNaN(date.getTime()) ? '-' : format(date, 'dd MMM yyyy');
+                      } catch {
+                        return '-';
+                      }
+                    })() : '-'}
                   </p>
-                  <p className="text-sm text-slate-600">{selectedBooking.schedule?.time || '-'}</p>
+                  <p className="text-sm text-slate-600">{selectedBooking.schedule?.time || selectedBooking.schedule?.timeSlot || '-'}</p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-slate-500">Amount</h3>

@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { Toaster } from 'react-hot-toast';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const Login = lazy(() => import('./pages/Login'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
@@ -16,7 +17,8 @@ const Customers = lazy(() => import('./pages/Customers'));
 // AMC route removed - using Booking Form directly
 // const AMC = lazy(() => import('./pages/AMC'));
 const Employees = lazy(() => import('./pages/Employees'));
-const Enquiries = lazy(() => import('./pages/Enquiries'));
+const Leads = lazy(() => import('./pages/Leads'));
+const FollowUps = lazy(() => import('./pages/FollowUps'));
 const Receipts = lazy(() => import('./pages/Receipts'));
 const Collections = lazy(() => import('./pages/Collections'));
 const Inventory = lazy(() => import('./pages/Inventory'));
@@ -25,10 +27,10 @@ const Notifications = lazy(() => import('./pages/Notifications'));
 const Reports = lazy(() => import('./pages/Reports'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Logistics = lazy(() => import('./pages/Logistics'));
-const HQAccount = lazy(() => import('./pages/HQAccount'));
 const Ledger = lazy(() => import('./pages/Ledger'));
 const TaskAssignment = lazy(() => import('./pages/TaskAssignment'));
 const MyTasks = lazy(() => import('./pages/MyTasks'));
+const Complains = lazy(() => import('./pages/Complains'));
 
 const LoadingScreen = () => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -45,6 +47,7 @@ const ProtectedRoute = ({ children }) => {
 const App = () => {
   return (
     <BrowserRouter>
+      <ErrorBoundary>
       <Suspense fallback={<LoadingScreen />}>
         <Toaster position="top-right" />
         <Routes>
@@ -58,12 +61,12 @@ const App = () => {
             <Route path="customers" element={<Customers />} />
             {/* AMC route removed - using Booking Form directly */}
             <Route path="employees" element={<Employees />} />
-            <Route path="enquiries" element={<Enquiries />} />
+            <Route path="leads" element={<Leads />} />
+            <Route path="followups" element={<FollowUps />} />
             <Route path="receipts" element={<Receipts />} />
             <Route path="collections" element={<Collections />} />
             <Route path="inventory" element={<Inventory />} />
             <Route path="expenses" element={<Expenses />} />
-            <Route path="hq-account" element={<HQAccount />} />
             <Route path="ledger" element={<Ledger />} />
             <Route path="logistics" element={<Logistics />} />
             <Route path="notifications" element={<Notifications />} />
@@ -74,9 +77,11 @@ const App = () => {
             <Route path="settings" element={<Settings />} />
             <Route path="task-assignment" element={<TaskAssignment />} />
             <Route path="my-tasks" element={<MyTasks />} />
+            <Route path="complains" element={<Complains />} />
           </Route>
         </Routes>
       </Suspense>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 };

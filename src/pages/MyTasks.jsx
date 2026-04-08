@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useSelector } from 'react-redux';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 import { Calendar, CheckCircle, XCircle, Clock, History, Eye, AlertCircle } from 'lucide-react';
@@ -7,94 +8,146 @@ import { format, parseISO, isToday, isTomorrow, isPast } from 'date-fns';
 
 const MyTasks = () => {
   const { user } = useSelector((state) => state.auth);
+  const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState('pending');
-  const [selectedDate, setSelectedDate] = useState(''); // Empty = show all tasks
-  const [myTasks, setMyTasks] = useState([]);
-  const [myHistory, setMyHistory] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('');
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [declineReason, setDeclineReason] = useState('');
   const [showDeclineModal, setShowDeclineModal] = useState(false);
 
-  const fetchMyTasks = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (activeTab === 'pending') {
-        params.append('status', 'ASSIGNED');
-      } else if (activeTab === 'accepted') {
-        params.append('status', 'ACCEPTED');
-      }
-      // Only filter by date if a specific date is selected, otherwise show all
-      if (selectedDate) {
-        params.append('date', selectedDate);
-      }
-      
-      const response = await api.get(`/task-assignments/my-tasks?${params.toString()}`);
-      setMyTasks(response.data.data);
-    } catch (error) {
-      toast.error('Error fetching tasks');
+  const fetchMyTasks = async () => {
+    const params = new URLSearchParams();
+    if (activeTab === 'pending') {
+      params.append('status', 'PENDING');
+    } else if (activeTab === 'accepted') {
+      params.append('status', 'ASSIGNED');
     }
-    setLoading(false);
-  }, [activeTab, selectedDate]);
-
-  const fetchMyHistory = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await api.get('/task-assignments/my-history');
-      setMyHistory(response.data.data);
-    } catch (error) {
-      toast.error('Error fetching history');
+    if (selectedDate) {
+      params.append('date', selectedDate);
     }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    fetchMyTasks();
-    if (activeTab === 'history') {
-      fetchMyHistory();
-    }
-  }, [activeTab, selectedDate, fetchMyTasks, fetchMyHistory]);
-
-  const handleAcceptTask = async (taskId) => {
-    try {
-      await api.patch(`/task-assignments/${taskId}/accept`);
-      toast.success('Task accepted successfully!');
-      fetchMyTasks();
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Error accepting task');
-    }
+    const response = await api.get(`/task-assignments/my-tasks?${params.toString()}`);
+    return response.data.data;
   };
 
-  const handleDeclineTask = async () => {
-    if (!declineReason.trim()) {
-      toast.error('Please provide a reason for declining');
-      return;
+  const { data: myTasks = [], isLoading: tasksLoading, refetch: refetchTasks } = useQuery({
+    queryKey: ['my-tasks', activeTab, selectedDate],
+    queryFn: fetchMyTasks,
+    staleTime: 5000,
+    refetchInterval: 10000
+  });
+
+  const { data: myHistory = [], isLoading: historyLoading, refetch: refetchHistory } = useQuery({
+    queryKey: ['my-tasks-history'],
+    queryFn: async () => {
+      const response = await api.get('/task-assignments/my-history');
+      return response.data.data;
+    },
+    enabled: activeTab === 'history',
+    staleTime: 5000
+  });
+
+  const acceptTaskMutation = useMutation({
+    mutationFn: (taskId) => api.patch(`/task-assignments/${taskId}/accept`),
+    onMutate: async (taskId) => {
+      // Cancel all my-tasks queries
+      await queryClient.cancelQueries({ queryKey: ['my-tasks'] });
+      const previousTasks = queryClient.getQueryData(['my-tasks', activeTab, selectedDate]);
+
+      // Optimistic: Remove from current list (it will move to ASSIGNED)
+      queryClient.setQueryData(['my-tasks', activeTab, selectedDate], (old) => {
+        if (!old) return [];
+        return old.filter(task => task._id !== taskId);
+      });
+      return { previousTasks };
+    },
+    onError: (err, taskId, context) => {
+      queryClient.setQueryData(['my-tasks', activeTab, selectedDate], context.previousTasks);
+      toast.error(err.response?.data?.message || 'Error accepting task');
+    },
+    onSuccess: () => {
+      toast.success('Task accepted!');
+      // Force refetch of my-tasks queries
+      queryClient.refetchQueries({ queryKey: ['my-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['my-tasks-history'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['task-assignments'] });
+      queryClient.invalidateQueries({ queryKey: ['unassigned-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['forms'] });
+      queryClient.invalidateQueries({ queryKey: ['forms-pending-payment'] });
+      queryClient.invalidateQueries({ queryKey: ['collections'] });
+      queryClient.invalidateQueries({ queryKey: ['collections-stats'] });
     }
-    try {
-      await api.patch(`/task-assignments/${selectedTask._id}/decline`, { reason: declineReason });
+  });
+
+  const declineTaskMutation = useMutation({
+    mutationFn: ({ taskId, reason }) => api.patch(`/task-assignments/${taskId}/decline`, { reason }),
+    onMutate: async ({ taskId, reason }) => {
+      await queryClient.cancelQueries({ queryKey: ['my-tasks'] });
+      const previousTasks = queryClient.getQueryData(['my-tasks', activeTab, selectedDate]);
+      // Optimistic: Remove from list (declined tasks go to history)
+      queryClient.setQueryData(['my-tasks', activeTab, selectedDate], (old) => {
+        if (!old) return [];
+        return old.filter(task => task._id !== taskId);
+      });
+      return { previousTasks };
+    },
+    onError: (err, variables, context) => {
+      queryClient.setQueryData(['my-tasks', activeTab, selectedDate], context.previousTasks);
+      toast.error('Error declining task');
+    },
+    onSuccess: () => {
       toast.success('Task declined');
       setShowDeclineModal(false);
       setDeclineReason('');
       setSelectedTask(null);
-      fetchMyTasks();
-    } catch (error) {
-      toast.error('Error declining task');
+      // Force refetch of my-tasks queries
+      queryClient.refetchQueries({ queryKey: ['my-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['my-tasks-history'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['task-assignments'] });
+      queryClient.invalidateQueries({ queryKey: ['unassigned-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['forms'] });
+      queryClient.invalidateQueries({ queryKey: ['forms-pending-payment'] });
+      queryClient.invalidateQueries({ queryKey: ['collections'] });
+      queryClient.invalidateQueries({ queryKey: ['collections-stats'] });
     }
-  };
+  });
 
-  const handleCompleteTask = async (taskId) => {
-    try {
-      await api.patch(`/task-assignments/${taskId}/complete`);
-      toast.success('Task completed!');
-      fetchMyTasks();
-      fetchMyHistory();
-    } catch (error) {
+  const completeTaskMutation = useMutation({
+    mutationFn: (taskId) => api.patch(`/task-assignments/${taskId}/complete`),
+    onMutate: async (taskId) => {
+      await queryClient.cancelQueries({ queryKey: ['my-tasks'] });
+      const previousTasks = queryClient.getQueryData(['my-tasks', activeTab, selectedDate]);
+      // Optimistic: Remove from current list (completed goes to history)
+      queryClient.setQueryData(['my-tasks', activeTab, selectedDate], (old) => {
+        if (!old) return [];
+        return old.filter(task => task._id !== taskId);
+      });
+      return { previousTasks };
+    },
+    onError: (err, taskId, context) => {
+      queryClient.setQueryData(['my-tasks', activeTab, selectedDate], context.previousTasks);
       toast.error('Error completing task');
+    },
+    onSuccess: () => {
+      toast.success('Task completed!');
+      // Force refetch of my-tasks queries
+      queryClient.refetchQueries({ queryKey: ['my-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['my-tasks-history'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['task-assignments'] });
+      queryClient.invalidateQueries({ queryKey: ['unassigned-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['forms'] });
+      queryClient.invalidateQueries({ queryKey: ['forms-pending-payment'] });
+      queryClient.invalidateQueries({ queryKey: ['collections'] });
+      queryClient.invalidateQueries({ queryKey: ['collections-stats'] });
     }
-  };
+  });
 
   const openDeclineModal = (task) => {
     setSelectedTask(task);
@@ -104,6 +157,22 @@ const MyTasks = () => {
   const openDetailModal = (task) => {
     setSelectedTask(task);
     setShowDetailModal(true);
+  };
+
+  const handleAcceptTask = (taskId) => {
+    acceptTaskMutation.mutate(taskId);
+  };
+
+  const handleDeclineTask = () => {
+    if (!declineReason.trim()) {
+      toast.error('Please provide a reason for declining');
+      return;
+    }
+    declineTaskMutation.mutate({ taskId: selectedTask._id, reason: declineReason });
+  };
+
+  const handleCompleteTask = (taskId) => {
+    completeTaskMutation.mutate(taskId);
   };
 
   const getDateLabel = (dateStr) => {
@@ -163,40 +232,37 @@ const MyTasks = () => {
       <div className="flex gap-2 mb-6">
         <button
           onClick={() => setActiveTab('pending')}
-          className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
-            activeTab === 'pending'
+          className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${activeTab === 'pending'
               ? 'bg-slate-900 text-white'
               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          }`}
+            }`}
         >
           <AlertCircle className="w-4 h-4" />
-          Pending ({myTasks.filter(t => t.status === 'ASSIGNED').length})
+          Requests ({myTasks.filter(t => t.status === 'PENDING').length})
         </button>
         <button
           onClick={() => setActiveTab('accepted')}
-          className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
-            activeTab === 'accepted'
+          className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${activeTab === 'accepted'
               ? 'bg-slate-900 text-white'
               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          }`}
+            }`}
         >
           <CheckCircle className="w-4 h-4" />
-          Accepted ({myTasks.filter(t => t.status === 'ACCEPTED').length})
+          Assigned ({myTasks.filter(t => t.status === 'ASSIGNED').length})
         </button>
         <button
           onClick={() => setActiveTab('history')}
-          className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
-            activeTab === 'history'
+          className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${activeTab === 'history'
               ? 'bg-slate-900 text-white'
               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          }`}
+            }`}
         >
           <History className="w-4 h-4" />
           History
         </button>
       </div>
 
-      {loading ? (
+      {(tasksLoading || historyLoading) ? (
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900"></div>
         </div>
@@ -217,13 +283,12 @@ const MyTasks = () => {
           {tasksToShow.map((task) => {
             const booking = task.serviceFormId;
             const isOverdue = task.status === 'ACCEPTED' && isDatePast(task.scheduledDate);
-            
+
             return (
               <div
                 key={task._id}
-                className={`bg-white rounded-xl shadow-sm border p-4 ${
-                  isOverdue ? 'border-red-300 bg-red-50' : ''
-                }`}
+                className={`bg-white rounded-xl shadow-sm border p-4 ${isOverdue ? 'border-red-300 bg-red-50' : ''
+                  }`}
               >
                 <div className="flex flex-col md:flex-row md:items-center gap-4">
                   <div className="flex-1">
@@ -275,19 +340,21 @@ const MyTasks = () => {
                     >
                       <Eye className="w-5 h-5" />
                     </button>
-                    
-                    {task.status === 'ASSIGNED' && (
+
+                    {task.status === 'PENDING' && (
                       <>
                         <button
                           onClick={() => handleAcceptTask(task._id)}
-                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+                          disabled={acceptTaskMutation.isPending}
+                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 disabled:opacity-50"
                         >
                           <CheckCircle className="w-4 h-4" />
                           Accept
                         </button>
                         <button
                           onClick={() => openDeclineModal(task)}
-                          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2"
+                          disabled={declineTaskMutation.isPending}
+                          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2 disabled:opacity-50"
                         >
                           <XCircle className="w-4 h-4" />
                           Decline
@@ -295,7 +362,7 @@ const MyTasks = () => {
                       </>
                     )}
 
-                    {task.status === 'ACCEPTED' && (
+                    {task.status === 'ASSIGNED' && (
                       <button
                         onClick={() => handleCompleteTask(task._id)}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
@@ -468,8 +535,7 @@ const MyTasks = () => {
               )}
               <button
                 onClick={() => setShowDetailModal(false)}
-                className={selectedTask.status === 'ASSIGNED' || selectedTask.status === 'ACCEPTED' ? 'flex-1' : 'w-full'}
-                className="px-4 py-2 border rounded-lg hover:bg-slate-50"
+                className={`px-4 py-2 border rounded-lg hover:bg-slate-50 ${(selectedTask.status === 'ASSIGNED' || selectedTask.status === 'ACCEPTED') ? 'flex-1' : 'w-full'}`}
               >
                 Close
               </button>

@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import { BarChart3, Download, Calendar, FileText, Receipt, Users, TrendingUp, IndianRupee, Filter, X, ChevronRight, Package, Clock, CheckCircle } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
+import { formatCurrency } from '../lib/utils';
 import { format, parseISO, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 
 const Reports = () => {
@@ -126,10 +127,6 @@ const Reports = () => {
     };
   }, [forms, receipts, expenses, dateRangeFilter]);
 
-  const formatCurrency = (num) => {
-    return (num || 0).toLocaleString('en-IN');
-  };
-
   const dateRangeOptions = [
     { id: 'today', label: 'Today' },
     { id: 'this_week', label: 'This Week' },
@@ -149,18 +146,17 @@ const Reports = () => {
             {isAdmin ? 'Overview & Analytics' : 'Your Performance Summary'}
           </p>
         </div>
-        
+
         {/* Date Range Filter */}
         <div className="flex gap-2 flex-wrap">
           {dateRangeOptions.map(opt => (
             <button
               key={opt.id}
               onClick={() => setDateRange(opt.id)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                dateRange === opt.id
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${dateRange === opt.id
                   ? 'bg-brand-600 text-white'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
+                }`}
             >
               {opt.label}
             </button>
@@ -173,7 +169,7 @@ const Reports = () => {
         <>
           {/* Summary Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-4 text-white shadow-lg">
+            <div className="bg-linear-to-br from-blue-500 to-blue-600 rounded-2xl p-4 text-white shadow-lg">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-medium opacity-80">Total Forms</p>
@@ -183,7 +179,7 @@ const Reports = () => {
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow-lg">
+            <div className="bg-linear-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow-lg">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-medium opacity-80">Collection</p>
@@ -193,7 +189,7 @@ const Reports = () => {
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl p-4 text-white shadow-lg">
+            <div className="bg-linear-to-br from-amber-500 to-amber-600 rounded-2xl p-4 text-white shadow-lg">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-medium opacity-80">Expenses</p>
@@ -203,7 +199,7 @@ const Reports = () => {
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-4 text-white shadow-lg">
+            <div className="bg-linear-to-br from-purple-500 to-purple-600 rounded-2xl p-4 text-white shadow-lg">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-medium opacity-80">Receipts</p>
@@ -267,11 +263,10 @@ const Reports = () => {
                       <td className="px-4 py-3">{rec.customerName}</td>
                       <td className="px-4 py-3 text-right font-bold">₹{formatCurrency(rec.advancePaid)}</td>
                       <td className="px-4 py-3 text-center">
-                        <span className={`px-2 py-1 text-xs font-bold rounded ${
-                          rec.status === 'PAID' ? 'bg-emerald-100 text-emerald-700' :
-                          rec.status === 'PARTIAL' ? 'bg-amber-100 text-amber-700' :
-                          'bg-slate-100 text-slate-700'
-                        }`}>
+                        <span className={`px-2 py-1 text-xs font-bold rounded ${rec.status === 'PAID' ? 'bg-emerald-100 text-emerald-700' :
+                            rec.status === 'PARTIAL' ? 'bg-amber-100 text-amber-700' :
+                              'bg-slate-100 text-slate-700'
+                          }`}>
                           {rec.status}
                         </span>
                       </td>
@@ -294,19 +289,19 @@ const Reports = () => {
       {isOffice && (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-4 text-white shadow-lg">
+            <div className="bg-linear-to-br from-blue-500 to-blue-600 rounded-2xl p-4 text-white shadow-lg">
               <p className="text-xs font-medium opacity-80">My Forms</p>
               <p className="text-3xl font-bold mt-1">{stats.totalForms}</p>
             </div>
-            <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow-lg">
+            <div className="bg-linear-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow-lg">
               <p className="text-xs font-medium opacity-80">Collections</p>
               <p className="text-2xl font-bold mt-1">₹{formatCurrency(stats.totalCollection)}</p>
             </div>
-            <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl p-4 text-white shadow-lg">
+            <div className="bg-linear-to-br from-amber-500 to-amber-600 rounded-2xl p-4 text-white shadow-lg">
               <p className="text-xs font-medium opacity-80">Expenses</p>
               <p className="text-2xl font-bold mt-1">₹{formatCurrency(stats.totalExpenses)}</p>
             </div>
-            <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-4 text-white shadow-lg">
+            <div className="bg-linear-to-br from-purple-500 to-purple-600 rounded-2xl p-4 text-white shadow-lg">
               <p className="text-xs font-medium opacity-80">Receipts</p>
               <p className="text-3xl font-bold mt-1">{stats.totalReceipts}</p>
             </div>
@@ -344,19 +339,19 @@ const Reports = () => {
       {isSales && (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-4 text-white shadow-lg">
+            <div className="bg-linear-to-br from-blue-500 to-blue-600 rounded-2xl p-4 text-white shadow-lg">
               <p className="text-xs font-medium opacity-80">My Forms</p>
               <p className="text-3xl font-bold mt-1">{stats.totalForms}</p>
             </div>
-            <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow-lg">
+            <div className="bg-linear-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow-lg">
               <p className="text-xs font-medium opacity-80">Collections</p>
               <p className="text-2xl font-bold mt-1">₹{formatCurrency(stats.totalCollection)}</p>
             </div>
-            <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl p-4 text-white shadow-lg">
+            <div className="bg-linear-to-br from-amber-500 to-amber-600 rounded-2xl p-4 text-white shadow-lg">
               <p className="text-xs font-medium opacity-80">Receipts</p>
               <p className="text-3xl font-bold mt-1">{stats.totalReceipts}</p>
             </div>
-            <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-4 text-white shadow-lg">
+            <div className="bg-linear-to-br from-purple-500 to-purple-600 rounded-2xl p-4 text-white shadow-lg">
               <p className="text-xs font-medium opacity-80">Completed</p>
               <p className="text-3xl font-bold mt-1">{stats.completedForms}</p>
             </div>
@@ -390,28 +385,28 @@ const Reports = () => {
       {isTechnician && (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-4 text-white shadow-lg">
+            <div className="bg-linear-to-br from-blue-500 to-blue-600 rounded-2xl p-4 text-white shadow-lg">
               <div className="flex items-center gap-2">
                 <Package size={20} />
                 <p className="text-xs font-medium opacity-80">My Stock</p>
               </div>
               <p className="text-2xl font-bold mt-2">View in Inventory</p>
             </div>
-            <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow-lg">
+            <div className="bg-linear-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow-lg">
               <div className="flex items-center gap-2">
                 <CheckCircle size={20} />
                 <p className="text-xs font-medium opacity-80">Completed</p>
               </div>
               <p className="text-3xl font-bold mt-2">{taskHistory.filter(t => t.status === 'COMPLETED').length}</p>
             </div>
-            <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl p-4 text-white shadow-lg">
+            <div className="bg-linear-to-br from-amber-500 to-amber-600 rounded-2xl p-4 text-white shadow-lg">
               <div className="flex items-center gap-2">
                 <Clock size={20} />
                 <p className="text-xs font-medium opacity-80">Usage Records</p>
               </div>
               <p className="text-3xl font-bold mt-2">{inventoryUsage.length}</p>
             </div>
-            <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-4 text-white shadow-lg">
+            <div className="bg-linear-to-br from-purple-500 to-purple-600 rounded-2xl p-4 text-white shadow-lg">
               <div className="flex items-center gap-2">
                 <TrendingUp size={20} />
                 <p className="text-xs font-medium opacity-80">This Month</p>
@@ -445,11 +440,10 @@ const Reports = () => {
                         {task.serviceFormId?.customerId?.name || task.serviceFormId?.customer?.name || 'N/A'}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className={`px-2 py-1 text-xs font-bold rounded ${
-                          task.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' :
-                          task.status === 'DECLINED' ? 'bg-red-100 text-red-700' :
-                          'bg-slate-100 text-slate-700'
-                        }`}>
+                        <span className={`px-2 py-1 text-xs font-bold rounded ${task.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' :
+                            task.status === 'DECLINED' ? 'bg-red-100 text-red-700' :
+                              'bg-slate-100 text-slate-700'
+                          }`}>
                           {task.status}
                         </span>
                       </td>

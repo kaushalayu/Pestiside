@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
-import { 
+import {
   Wallet, TrendingUp, TrendingDown, Clock, Building2, User,
   ArrowDownLeft, ArrowUpRight, Filter, Receipt, AlertCircle,
   CheckCircle, XCircle, Package, Send, ArrowRightLeft
 } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
+import { formatCurrency } from '../lib/utils';
 
 const Badge = ({ children, variant = 'default' }) => {
   const styles = {
@@ -58,10 +59,6 @@ const Ledger = () => {
     enabled: isSuperAdmin && activeTab === 'hq'
   });
 
-  const formatCurrency = (num) => {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(num || 0);
-  };
-
   const getCategoryIcon = (category) => {
     switch (category) {
       case 'CUSTOMER_RECEIPT':
@@ -100,25 +97,25 @@ const Ledger = () => {
     return labels[category] || category;
   };
 
-  const transactions = activeTab === 'my-ledger' 
+  const transactions = activeTab === 'my-ledger'
     ? (myLedgerData?.transactions || [])
     : activeTab === 'branch-ledger'
-    ? (branchLedgerData?.transactions || [])
-    : (hqData?.recentTransactions || []);
+      ? (branchLedgerData?.transactions || [])
+      : (hqData?.recentTransactions || []);
 
   const summary = activeTab === 'my-ledger'
     ? myLedgerData?.summary
     : activeTab === 'branch-ledger'
-    ? branchLedgerData?.summary
-    : hqData?.balance;
+      ? branchLedgerData?.summary
+      : hqData?.balance;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50 pb-24">
+    <div className="min-h-screen bg-linear-to-br from-slate-50 via-slate-100 to-slate-50 pb-24">
       <div className="max-w-7xl mx-auto px-4 md:px-6 pt-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <div>
             <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-gradient-to-br from-slate-700 to-slate-800 rounded-xl text-white shadow-lg">
+              <div className="p-2.5 bg-linear-to-br from-slate-700 to-slate-800 rounded-xl text-white shadow-lg">
                 <Wallet size={22} />
               </div>
               <div>
@@ -129,7 +126,7 @@ const Ledger = () => {
               </div>
             </div>
           </div>
-          
+
           <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
             {[
               { id: 'my-ledger', label: 'My Ledger', icon: User },
@@ -141,11 +138,10 @@ const Ledger = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-                  activeTab === tab.id 
-                    ? 'bg-slate-800 text-white shadow-md' 
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === tab.id
+                    ? 'bg-slate-800 text-white shadow-md'
                     : 'text-slate-600 hover:bg-slate-50'
-                }`}
+                  }`}
               >
                 <tab.icon size={16} />
                 {tab.label}
@@ -174,7 +170,7 @@ const Ledger = () => {
               {formatCurrency(summary?.totalDebit || summary?.totalExpense || 0)}
             </p>
           </div>
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-2xl text-white shadow-lg">
+          <div className="bg-linear-to-br from-slate-800 to-slate-900 p-5 rounded-2xl text-white shadow-lg">
             <div className="flex items-center gap-2 mb-2">
               <Wallet size={16} className="text-slate-400" />
               <span className="text-xs font-semibold text-slate-400 uppercase">Balance</span>
@@ -183,8 +179,8 @@ const Ledger = () => {
               {formatCurrency(summary?.balance || 0)}
             </p>
             <p className="text-[10px] text-slate-400 mt-1">
-              {activeTab === 'my-ledger' ? 'Your net balance' : 
-               activeTab === 'branch-ledger' ? 'Branch net balance' : 'HQ net balance'}
+              {activeTab === 'my-ledger' ? 'Your net balance' :
+                activeTab === 'branch-ledger' ? 'Branch net balance' : 'HQ net balance'}
             </p>
           </div>
         </div>
@@ -196,7 +192,7 @@ const Ledger = () => {
               <h3 className="text-white font-bold text-sm flex items-center gap-2">
                 <Clock size={18} /> Transaction History
               </h3>
-              <select 
+              <select
                 value={filterType}
                 onChange={e => setFilterType(e.target.value)}
                 className="px-3 py-1.5 bg-white/10 border border-white/20 rounded-lg text-white text-xs"
@@ -207,7 +203,7 @@ const Ledger = () => {
               </select>
             </div>
           </div>
-          
+
           <div className="divide-y divide-slate-100">
             {transactions.length === 0 ? (
               <div className="text-center py-12 text-slate-400">
@@ -218,12 +214,11 @@ const Ledger = () => {
               transactions.map((txn) => (
                 <div key={txn._id} className="px-6 py-4 hover:bg-slate-50 flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className={`p-2.5 rounded-xl ${
-                      txn.type === 'CREDIT' || txn.type === 'INCOME' 
-                        ? 'bg-emerald-50' 
+                    <div className={`p-2.5 rounded-xl ${txn.type === 'CREDIT' || txn.type === 'INCOME'
+                        ? 'bg-emerald-50'
                         : 'bg-red-50'
-                    }`}>
-                      {txn.type === 'CREDIT' || txn.type === 'INCOME' 
+                      }`}>
+                      {txn.type === 'CREDIT' || txn.type === 'INCOME'
                         ? <ArrowDownLeft size={18} className="text-emerald-600" />
                         : <ArrowUpRight size={18} className="text-red-600" />
                       }
@@ -240,11 +235,10 @@ const Ledger = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className={`text-lg font-black ${
-                      txn.type === 'CREDIT' || txn.type === 'INCOME'
-                        ? 'text-emerald-600' 
+                    <p className={`text-lg font-black ${txn.type === 'CREDIT' || txn.type === 'INCOME'
+                        ? 'text-emerald-600'
                         : 'text-red-600'
-                    }`}>
+                      }`}>
                       {txn.type === 'CREDIT' || txn.type === 'INCOME' ? '+' : '-'}
                       {formatCurrency(txn.amount)}
                     </p>

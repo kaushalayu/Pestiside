@@ -18,7 +18,12 @@ const Forms = () => {
   const { user } = useSelector(state => state.auth);
   const isAdmin = user?.role === 'super_admin' || user?.role === 'branch_admin';
   const isSuperAdmin = user?.role === 'super_admin';
-  const { data: forms, isLoading } = useQuery({ queryKey: ['forms'], queryFn: fetchForms });
+  const { data: forms, isLoading } = useQuery({ 
+    queryKey: ['forms'], 
+    queryFn: fetchForms,
+    staleTime: 5000,
+    refetchInterval: 10000
+  });
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -30,14 +35,39 @@ const Forms = () => {
 
   const statusMutation = useMutation({
     mutationFn: ({ id, status, notes }) => api.patch(`/forms/${id}/status`, { status, notes }),
-    onSuccess: (res) => {
-      queryClient.invalidateQueries(['forms']);
+    onMutate: async ({ id, status }) => {
+      await queryClient.cancelQueries({ queryKey: ['forms'] });
+      const previousForms = queryClient.getQueryData(['forms']);
+      
+      // Optimistic update
+      queryClient.setQueryData(['forms'], (oldData) => {
+        if (!oldData) return oldData;
+        if (Array.isArray(oldData)) {
+          return oldData.map(form => form._id === id ? { ...form, status } : form);
+        }
+        return oldData;
+      });
+      return { previousForms };
+    },
+    onError: (err, variables, context) => {
+      queryClient.setQueryData(['forms'], context?.previousForms);
+      toast.error(err.response?.data?.message || 'Status update failed');
+    },
+    onSuccess: (res, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['forms'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['task-assignments'] });
+      queryClient.invalidateQueries({ queryKey: ['my-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['collections'] });
+      queryClient.invalidateQueries({ queryKey: ['collections-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['forms-pending-payment'] });
+      queryClient.invalidateQueries({ queryKey: ['unassigned-bookings'] });
       setShowStatusModal(false);
       setSelectedForm(null);
       setStatusNotes('');
       toast.success(`Status updated to ${res.data.data.status}`);
-    },
-    onError: (err) => toast.error(err.response?.data?.message || 'Status update failed')
+    }
   });
 
   const filteredForms = forms?.filter(form => {

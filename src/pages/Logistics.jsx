@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
+import { formatCurrency } from '../lib/utils';
 
 const PURPOSE_OPTIONS = [
   { value: 'SERVICE', label: 'Service Visit', icon: '🔧', color: 'blue' },
@@ -54,7 +55,9 @@ const Logistics = () => {
       const res = await api.get('/travel-logs/forms');
       return res.data.data || [];
     },
-    enabled: true
+    enabled: true,
+    staleTime: 0,
+    refetchInterval: 5000
   });
 
   const { data: activeLog } = useQuery({
@@ -62,7 +65,9 @@ const Logistics = () => {
     queryFn: async () => {
       const res = await api.get('/travel-logs/active');
       return res.data.data;
-    }
+    },
+    staleTime: 0,
+    refetchInterval: 5000
   });
 
   useEffect(() => {
@@ -79,7 +84,9 @@ const Logistics = () => {
     queryFn: async () => {
       const res = await api.get('/travel-logs');
       return res.data.data || [];
-    }
+    },
+    staleTime: 0,
+    refetchInterval: 5000
   });
 
   const { data: pendingApprovals } = useQuery({
@@ -88,57 +95,105 @@ const Logistics = () => {
       const res = await api.get('/travel-logs/pending');
       return res.data.data || [];
     },
-    enabled: isAdmin
+    enabled: isAdmin,
+    staleTime: 0,
+    refetchInterval: 5000
   });
 
   const startMutation = useMutation({
     mutationFn: (data) => api.post('/travel-logs/start', data),
+    onMutate: async (newTravel) => {
+      await queryClient.cancelQueries(['travel-active']);
+      const previousActive = queryClient.getQueryData(['travel-active']);
+      
+      const tempLog = {
+        _id: 'temp-' + Date.now(),
+        ...newTravel,
+        employeeId: { name: user?.name },
+        status: 'DRAFT',
+        startMeter: newTravel.startMeter,
+        startTime: new Date().toISOString(),
+        createdAt: new Date().toISOString()
+      };
+      
+      queryClient.setQueryData(['travel-active'], tempLog);
+      
+      return { previousActive };
+    },
+    onError: (err, newTravel, context) => {
+      queryClient.setQueryData(['travel-active'], context?.previousActive);
+      toast.error(err.response?.data?.message || 'Failed to start');
+    },
     onSuccess: (res) => {
       toast.success('Travel started!');
-      queryClient.invalidateQueries(['travel-active']);
-      queryClient.invalidateQueries(['travel-history']);
+      queryClient.invalidateQueries({ queryKey: ['travel-active'] });
+      queryClient.invalidateQueries({ queryKey: ['travel-history'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       setShowNewForm(false);
       resetForm();
     },
-    onError: (err) => toast.error(err.response?.data?.message || 'Failed to start')
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => api.put(`/travel-logs/${id}`, data),
-    onSuccess: () => {
-      toast.success('Updated');
-      queryClient.invalidateQueries(['travel-active']);
-    },
-    onError: (err) => toast.error(err.response?.data?.message || 'Failed to update')
   });
 
   const endMutation = useMutation({
     mutationFn: ({ id, data }) => api.post(`/travel-logs/${id}/end`, data),
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries(['travel-active']);
+      const previousActive = queryClient.getQueryData(['travel-active']);
+      
+      queryClient.setQueryData(['travel-active'], (old) => ({
+        ...old,
+        endMeter: data.endMeter,
+        status: 'COMPLETED'
+      }));
+      
+      return { previousActive };
+    },
+    onError: (err, variables, context) => {
+      queryClient.setQueryData(['travel-active'], context?.previousActive);
+      toast.error(err.response?.data?.message || 'Failed to complete');
+    },
     onSuccess: () => {
       toast.success('Travel completed! Waiting for approval.');
-      queryClient.invalidateQueries(['travel-active']);
-      queryClient.invalidateQueries(['travel-history']);
+      queryClient.invalidateQueries({ queryKey: ['travel-active'] });
+      queryClient.invalidateQueries({ queryKey: ['travel-history'] });
+      queryClient.invalidateQueries({ queryKey: ['travel-pending'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       resetForm();
     },
-    onError: (err) => toast.error(err.response?.data?.message || 'Failed to complete')
   });
 
   const cancelMutation = useMutation({
     mutationFn: (id) => api.delete(`/travel-logs/${id}`),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries(['travel-active']);
+      const previousActive = queryClient.getQueryData(['travel-active']);
+      
+      queryClient.setQueryData(['travel-active'], null);
+      
+      return { previousActive };
+    },
+    onError: (err, id, context) => {
+      queryClient.setQueryData(['travel-active'], context?.previousActive);
+      toast.error(err.response?.data?.message || 'Failed to cancel');
+    },
     onSuccess: () => {
       toast.success('Travel cancelled');
-      queryClient.invalidateQueries(['travel-active']);
-      queryClient.invalidateQueries(['travel-history']);
+      queryClient.invalidateQueries({ queryKey: ['travel-active'] });
+      queryClient.invalidateQueries({ queryKey: ['travel-history'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       resetForm();
     },
-    onError: (err) => toast.error(err.response?.data?.message || 'Failed to cancel')
   });
 
   const acceptMutation = useMutation({
     mutationFn: (id) => api.post(`/travel-logs/${id}/accept`),
     onSuccess: () => {
       toast.success('Allowance accepted and settled!');
-      queryClient.invalidateQueries(['travel-history']);
+      queryClient.invalidateQueries({ queryKey: ['travel-history'] });
+      queryClient.invalidateQueries({ queryKey: ['travel-pending'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['collections'] });
+      queryClient.invalidateQueries({ queryKey: ['collections-stats'] });
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to accept')
   });
@@ -147,7 +202,11 @@ const Logistics = () => {
     mutationFn: ({ id, status, remark }) => api.post(`/travel-logs/${id}/branch-approve`, { status, remark }),
     onSuccess: () => {
       toast.success('Action completed');
-      queryClient.invalidateQueries(['travel-pending']);
+      queryClient.invalidateQueries({ queryKey: ['travel-pending'] });
+      queryClient.invalidateQueries({ queryKey: ['travel-history'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['collections'] });
+      queryClient.invalidateQueries({ queryKey: ['collections-stats'] });
       setShowRejectModal(null);
       setRejectRemark('');
     },
@@ -158,7 +217,11 @@ const Logistics = () => {
     mutationFn: ({ id, status, remark }) => api.post(`/travel-logs/${id}/super-approve`, { status, remark }),
     onSuccess: () => {
       toast.success('Action completed');
-      queryClient.invalidateQueries(['travel-pending']);
+      queryClient.invalidateQueries({ queryKey: ['travel-pending'] });
+      queryClient.invalidateQueries({ queryKey: ['travel-history'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['collections'] });
+      queryClient.invalidateQueries({ queryKey: ['collections-stats'] });
       setShowRejectModal(null);
       setRejectRemark('');
     },
@@ -170,7 +233,7 @@ const Logistics = () => {
       const reader = new FileReader();
       reader.onload = async (e) => {
         try {
-          const img = new Image();
+          const img = new window.Image();
           img.onload = async () => {
             const canvas = document.createElement('canvas');
             const maxSize = 1200;
@@ -312,10 +375,6 @@ const Logistics = () => {
     return logs;
   };
 
-  const formatCurrency = (num) => {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(num || 0);
-  };
-
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 pb-24">
       <div className="flex items-center justify-between">
@@ -358,6 +417,21 @@ const Logistics = () => {
           )}
         </div>
       </div>
+
+      {/* Open Travel Warning for Admin */}
+      {!isAdmin && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-center gap-3">
+          <div className="p-2 bg-red-100 rounded-xl">
+            <AlertCircle size={20} className="text-red-600" />
+          </div>
+          <div>
+            <p className="font-bold text-red-800">⚠️ Important Warning</p>
+            <p className="text-sm text-red-600">
+              After starting travel, you MUST end it within 12 hours. Not ending travel on time will result in ₹100 penalty.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Admin Pending Approvals */}
       {isAdmin && !showHistory && (
@@ -561,6 +635,28 @@ const Logistics = () => {
           </div>
         </div>
       )}
+
+      {/* Active Travel Warning */}
+      {activeLog && !isAdmin && (() => {
+        const startTime = new Date(activeLog.startTime || activeLog.createdAt);
+        const hoursSinceStart = (Date.now() - startTime.getTime()) / (1000 * 60 * 60);
+        const hasEndMeter = !!activeLog.endMeter;
+        const showWarning = hoursSinceStart > 12 && !hasEndMeter;
+        
+        return showWarning ? (
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-center gap-3">
+            <div className="p-2 bg-red-100 rounded-xl">
+              <AlertCircle size={20} className="text-red-600" />
+            </div>
+            <div>
+              <p className="font-bold text-red-800">Travel Not Ended</p>
+              <p className="text-sm text-red-600">
+                You started traveling {Math.floor(hoursSinceStart)} hours ago. Please end travel to avoid ₹100 penalty.
+              </p>
+            </div>
+          </div>
+        ) : null;
+      })()}
 
       {/* Employee Active Travel */}
       {activeLog && !isAdmin && (
@@ -812,9 +908,16 @@ const Logistics = () => {
               >
                 <option value="">No booking linked</option>
                 {linkedForms?.map(form => (
-                  <option key={form._id} value={form._id}>{form.orderNo} - {form.customer?.name}</option>
+                  <option key={form._id} value={form._id}>
+                    {form.orderNo} - {form.customer?.name} ({form.serviceType || 'N/A'})
+                  </option>
                 ))}
               </select>
+              {linkedFormId && (
+                <p className="text-xs text-emerald-600 mt-2 flex items-center gap-1">
+                  <Check size={12} /> Booking linked successfully
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

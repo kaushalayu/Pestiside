@@ -9,7 +9,8 @@ import {
 import {
   Users, FileText, Building2, TrendingUp, Activity,
   IndianRupee, ArrowUpRight, Calendar, Clock,
-  CheckCircle, AlertCircle, Mail, Receipt, Plus, Building, Wallet
+  CheckCircle, AlertCircle, Mail, Receipt, Plus, Building, Wallet, RefreshCw,
+  Target, Phone, Star, UserCheck
 } from 'lucide-react';
 import api from '../lib/api';
 
@@ -37,18 +38,18 @@ const StatCard = ({ title, value, subtitle, icon: IconComponent, color = 'emeral
   const styles = colorStyles[color] || colorStyles.emerald;
   
   return (
-    <div className={`bg-white rounded-2xl p-4 md:p-6 border ${styles.border} group overflow-hidden relative transition-all hover:shadow-xl hover:-translate-y-1`}>
-      <div className="absolute top-0 right-0 p-3 opacity-[0.03] group-hover:rotate-12 transition-transform duration-500">
-        <IconComponent size={70} />
+    <div className={`bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 border ${styles.border} group overflow-hidden relative transition-all hover:shadow-xl hover:-translate-y-1`}>
+      <div className="absolute top-0 right-0 p-2 sm:p-3 opacity-[0.03] group-hover:rotate-12 transition-transform duration-500">
+        <IconComponent size={40} className="sm:w-[70px] sm:h-[70px]" />
       </div>
       <div className="flex items-start justify-between relative z-10">
         <div className="min-w-0 flex-1">
-          <h4 className="text-slate-500 font-semibold uppercase text-[10px] md:text-xs tracking-wider mb-1 md:mb-2 truncate">{title}</h4>
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-display font-bold text-slate-900 tracking-tight leading-tight">{value}</h2>
-          {subtitle && <p className="text-[9px] md:text-xs text-slate-400 mt-1 truncate">{subtitle}</p>}
+          <h4 className="text-slate-500 font-semibold uppercase text-[8px] sm:text-[10px] md:text-xs tracking-wider mb-0.5 sm:mb-1 md:mb-2 truncate">{title}</h4>
+          <h2 className="text-lg sm:text-2xl md:text-3xl lg:text-4xl font-display font-bold text-slate-900 tracking-tight leading-tight">{value}</h2>
+          {subtitle && <p className="text-[8px] sm:text-[9px] md:text-xs text-slate-400 mt-0.5 sm:mt-1 truncate hidden sm:block">{subtitle}</p>}
         </div>
-        <div className={`p-2 md:p-3 rounded-xl ${styles.bg} text-white shadow-lg flex-shrink-0`}>
-          <IconComponent size={18} className="md:w-[22px] md:h-[22px]" />
+        <div className={`p-1.5 sm:p-2 md:p-3 rounded-lg sm:rounded-xl ${styles.bg} text-white shadow-lg flex-shrink-0`}>
+          <IconComponent size={14} className="sm:w-4 sm:h-4 md:w-[22px] md:h-[22px]" />
         </div>
       </div>
     </div>
@@ -63,20 +64,18 @@ const Dashboard = () => {
   const isTechnician = user?.role === 'technician' || user?.role === 'sales';
   const isOffice = user?.role === 'office';
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['dashboard'],
     queryFn: fetchDashboardData,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    staleTime: 0,
+    refetchInterval: 5000,
   });
 
-  const { data: hqSummary } = useQuery({
+  const { data: hqSummary, refetch: refetchHQ } = useQuery({
     queryKey: ['hqSummary'],
     queryFn: fetchHQSummary,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    staleTime: 0,
+    refetchInterval: 10000,
     enabled: isAdmin,
   });
 
@@ -104,6 +103,7 @@ const Dashboard = () => {
   const activity = data?.activity || [];
   const pendingApprovals = data?.pendingApprovals || [];
   const pendingExpenses = data?.pendingExpenses || [];
+  const leadStats = data?.leadStats || {};
 
   const totalEnquiries = funnel.reduce((sum, f) => sum + f.count, 0);
   const funnelData = funnel.map(f => ({
@@ -113,34 +113,39 @@ const Dashboard = () => {
   }));
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 pb-24">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 pb-24">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-display font-bold text-slate-900 tracking-tight uppercase flex items-center gap-3">
-            <div className="p-2 bg-slate-900 text-white rounded-lg"><Activity size={20} /></div>
+          <h1 className="text-lg sm:text-2xl md:text-3xl font-display font-bold text-slate-900 tracking-tight uppercase flex items-center gap-2 sm:gap-3">
+            <div className="p-1.5 sm:p-2 bg-slate-900 text-white rounded-lg"><Activity size={16} className="sm:w-5 sm:h-5" /></div>
             Dashboard
           </h1>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1 italic flex items-center gap-2">
-            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+          <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] sm:tracking-[0.3em] mt-1 italic flex items-center gap-2">
+            <span className="w-1.5 sm:w-2 h-1.5 sm:h-2 bg-emerald-500 rounded-full animate-pulse"></span>
             Real-time metrics
           </p>
         </div>
-        <Link to="/forms/create" className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-emerald-500 transition-all flex items-center gap-2 shadow-lg">
-          <Plus size={16} /> New Booking
-        </Link>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <button onClick={() => { refetch(); if (refetchHQ) refetchHQ(); }} className="px-3 sm:px-4 py-2 sm:py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg sm:rounded-xl font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 sm:gap-2 flex-1 sm:flex-none">
+            <RefreshCw size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Refresh</span>
+          </button>
+          <Link to="/forms/create" className="px-4 sm:px-6 py-2 sm:py-3 bg-emerald-600 text-white rounded-lg sm:rounded-xl font-black text-[10px] sm:text-xs uppercase tracking-widest hover:bg-emerald-500 transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-lg flex-1 sm:flex-none">
+            <Plus size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">New Booking</span><span className="sm:hidden">Booking</span>
+          </Link>
+        </div>
       </div>
 
-      {/* Super Admin & Branch Admin: All Stats */}
-      {isAdmin && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-          <StatCard title="Forms Today" value={stats.forms?.today || 0} subtitle={`${stats.forms?.week || 0} this week`} icon={FileText} color="blue" />
-          <StatCard title="Pending Revenue" value={`₹${(stats.pendingRevenue || 0).toLocaleString('en-IN')}`} subtitle="Outstanding" icon={IndianRupee} color="amber" />
-          <StatCard title="Today's Collection" value={`₹${(stats.todayCollection || 0).toLocaleString('en-IN')}`} subtitle="Collected" icon={Receipt} color="emerald" />
-          <StatCard title="Total Collection" value={`₹${(stats.overallCollection || 0).toLocaleString('en-IN')}`} subtitle="All time" icon={TrendingUp} color="purple" />
+      {/* Stats Cards - Single section for all roles */}
+      {(isAdmin || isTechnician || isOffice) && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
+          <StatCard title={isTechnician ? "My Forms Today" : "Forms Today"} value={stats.forms?.today || 0} subtitle={`${stats.forms?.week || 0} this week`} icon={FileText} color="blue" />
+          <StatCard title={isTechnician ? "Pending Tasks" : "Pending Revenue"} value={isTechnician ? (stats.pendingTasks || 0) : `₹${(stats.pendingRevenue || 0).toLocaleString('en-IN')}`} subtitle={isTechnician ? "Awaiting action" : "Outstanding"} icon={isTechnician ? CheckCircle : IndianRupee} color={isTechnician ? "amber" : "amber"} />
+          <StatCard title={isTechnician ? "My Collection" : "Today's Collection"} value={`₹${(stats.todayCollection || 0).toLocaleString('en-IN')}`} subtitle="Collected" icon={Receipt} color="emerald" />
+          <StatCard title={isTechnician ? "My Total" : "Total Collection"} value={`₹${(stats.overallCollection || 0).toLocaleString('en-IN')}`} subtitle="All time" icon={TrendingUp} color="purple" />
         </div>
       )}
 
-      {/* HQ Summary for All Admins */}
+      {/* HQ Summary - Only for Admin */}
       {isAdmin && hqSummary && (hqSummary.totals || hqSummary.totalReceivedFromHQ) && (
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-6 border border-slate-700">
           <div className="flex items-center gap-2 mb-4">
@@ -171,26 +176,6 @@ const Dashboard = () => {
               <p className="text-lg md:text-2xl font-display font-black text-emerald-400 truncate">₹{((hqSummary.totals?.totalReceivedFromHQ) || hqSummary.totalReceivedFromHQ || 0).toLocaleString('en-IN')}</p>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Technician/Sales: My Stats */}
-      {isTechnician && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-          <StatCard title="My Forms Today" value={stats.forms?.today || 0} subtitle={`${stats.forms?.week || 0} this week`} icon={FileText} color="blue" />
-          <StatCard title="My Pending Revenue" value={`₹${(stats.pendingRevenue || 0).toLocaleString('en-IN')}`} subtitle="Outstanding" icon={IndianRupee} color="amber" />
-          <StatCard title="My Collection Today" value={`₹${(stats.todayCollection || 0).toLocaleString('en-IN')}`} subtitle="Collected" icon={Receipt} color="emerald" />
-          <StatCard title="My Total Collection" value={`₹${(stats.overallCollection || 0).toLocaleString('en-IN')}`} subtitle="All time" icon={TrendingUp} color="purple" />
-        </div>
-      )}
-
-      {/* Office: Branch Stats */}
-      {isOffice && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-          <StatCard title="Branch Forms Today" value={stats.forms?.today || 0} subtitle={`${stats.forms?.week || 0} this week`} icon={FileText} color="blue" />
-          <StatCard title="Pending Revenue" value={`₹${(stats.pendingRevenue || 0).toLocaleString('en-IN')}`} subtitle="Outstanding" icon={IndianRupee} color="amber" />
-          <StatCard title="Today's Collection" value={`₹${(stats.todayCollection || 0).toLocaleString('en-IN')}`} subtitle="Collected" icon={Receipt} color="emerald" />
-          <StatCard title="Total Collection" value={`₹${(stats.overallCollection || 0).toLocaleString('en-IN')}`} subtitle="All time" icon={TrendingUp} color="purple" />
         </div>
       )}
 
@@ -266,44 +251,205 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Recent Activity - For Everyone */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6">
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 md:p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">
-              {isTechnician ? 'My Recent Activity' : 'Recent Activity'}
-            </h3>
-            <button onClick={() => navigate('/forms')} className="text-xs text-emerald-600 hover:text-emerald-700 font-bold">View all</button>
-          </div>
-          {activity.length > 0 ? (
-            <div className="space-y-3">
-              {activity.slice(0, 6).map((item, idx) => (
-                <div key={idx} className="flex items-start gap-3 text-xs">
-                  <div className={`p-1.5 rounded-lg ${
-                    item.type === 'FORM' ? 'bg-blue-100 text-blue-600' :
-                    item.type === 'ENQUIRY' ? 'bg-amber-100 text-amber-600' :
-                    'bg-emerald-100 text-emerald-600'
-                  }`}>
-                    {item.type === 'FORM' ? <FileText size={12} /> :
-                     item.type === 'ENQUIRY' ? <Users size={12} /> :
-                     <Receipt size={12} />}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-slate-700">{item.description}</p>
-                    <p className="text-slate-400 text-[10px]">
-                      {new Date(item.timestamp).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                </div>
-              ))}
+      {/* Lead Stats - ALL roles */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 md:p-6">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-slate-900 rounded-xl text-white"><Target size={16} /></div>
+            <div>
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Lead Pipeline</h3>
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
+                {isSuperAdmin ? 'All branches' : isTechnician ? 'Your assigned leads' : 'Your branch'}
+              </p>
             </div>
-          ) : (
-            <p className="text-slate-400 text-center py-8">No recent activity</p>
-          )}
+          </div>
+          <Link to="/leads" className="text-xs text-brand-600 hover:text-brand-700 font-black uppercase tracking-widest flex items-center gap-1">
+            View All <ArrowUpRight size={12} />
+          </Link>
         </div>
 
-        {/* Pending Approvals - Admin Only */}
-        {isAdmin && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
+          {[
+            { label: 'Total',     value: leadStats.total || 0,           color: 'text-slate-900',   bg: 'bg-slate-50' },
+            { label: 'New Today', value: leadStats.newToday || 0,        color: 'text-emerald-600', bg: 'bg-emerald-50' },
+            { label: 'Follow-ups Today', value: leadStats.followupsToday || 0, color: 'text-amber-600', bg: 'bg-amber-50' },
+            { label: 'Overdue',   value: leadStats.overdueFollowups || 0, color: 'text-red-600',    bg: 'bg-red-50' },
+            { label: 'Converted', value: leadStats.converted || 0,       color: 'text-purple-600',  bg: 'bg-purple-50' },
+            { label: 'Qualified', value: (leadStats.statusStats || []).find(s => s._id === 'QUALIFIED')?.count || 0, color: 'text-blue-600', bg: 'bg-blue-50' },
+          ].map(s => (
+            <div key={s.label} className={`${s.bg} rounded-2xl p-3 md:p-4`}>
+              <p className={`text-[8px] font-black uppercase tracking-widest mb-1 opacity-60 ${s.color}`}>{s.label}</p>
+              <p className={`text-xl md:text-2xl font-black ${s.color}`}>{s.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Status breakdown bar */}
+        {(leadStats.statusStats || []).length > 0 ? (
+          <div className="space-y-2">
+            {leadStats.statusStats.map((s, i) => {
+              const total = leadStats.total || 1;
+              const pct = Math.round((s.count / total) * 100);
+              const colors = ['bg-emerald-500','bg-blue-500','bg-cyan-500','bg-amber-500','bg-purple-500','bg-slate-900','bg-red-400','bg-slate-300'];
+              return (
+                <div key={s._id} className="flex items-center gap-3 text-xs">
+                  <span className="w-24 text-slate-500 font-bold truncate">{s._id}</span>
+                  <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div className={`h-full ${colors[i % colors.length]} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="w-8 text-right font-black text-slate-700">{s.count}</span>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-4 bg-slate-50 rounded-xl">
+            <p className="text-slate-400 text-sm font-medium">No leads assigned yet</p>
+          </div>
+        )}
+
+        {/* Quick actions for leads */}
+        <div className="flex gap-2 mt-4 pt-4 border-t border-slate-100 flex-wrap">
+          <Link to="/leads" className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all">
+            <Target size={12} /> Leads
+          </Link>
+          <Link to="/followups" className="flex items-center gap-1.5 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-100 transition-all">
+            <Calendar size={12} /> Follow-ups
+            {leadStats.overdueFollowups > 0 && (
+              <span className="bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full">{leadStats.overdueFollowups}</span>
+            )}
+          </Link>
+          <Link to="/leads" className="flex items-center gap-1.5 px-4 py-2 bg-brand-50 border border-brand-200 text-brand-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-100 transition-all">
+            <Plus size={12} /> New Lead
+          </Link>
+        </div>
+      </div>
+
+      {/* Technician Dashboard Section */}
+      {isTechnician && (
+        <div className="space-y-4">
+          {/* Quick Actions for Technicians */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 md:p-6">
+            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Quick Actions</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <button 
+                onClick={() => navigate('/forms/create')}
+                className="flex flex-col items-center gap-2 p-4 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors"
+              >
+                <Plus size={24} className="text-blue-600" />
+                <span className="text-xs font-semibold text-blue-700 text-center">New Booking</span>
+              </button>
+              <button 
+                onClick={() => navigate('/my-tasks')}
+                className="flex flex-col items-center gap-2 p-4 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-colors"
+              >
+                <FileText size={24} className="text-emerald-600" />
+                <span className="text-xs font-semibold text-emerald-700 text-center">My Tasks</span>
+              </button>
+              <button 
+                onClick={() => navigate('/receipts')}
+                className="flex flex-col items-center gap-2 p-4 bg-purple-50 hover:bg-purple-100 rounded-xl transition-colors"
+              >
+                <Receipt size={24} className="text-purple-600" />
+                <span className="text-xs font-semibold text-purple-700 text-center">Receipts</span>
+              </button>
+              <button 
+                onClick={() => navigate('/logistics')}
+                className="flex flex-col items-center gap-2 p-4 bg-amber-50 hover:bg-amber-100 rounded-xl transition-colors"
+              >
+                <Activity size={24} className="text-amber-600" />
+                <span className="text-xs font-semibold text-amber-700 text-center">Travel Log</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Recent Activity for Technicians */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 md:p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">
+                My Recent Activity
+              </h3>
+              <button onClick={() => navigate('/forms')} className="text-xs text-emerald-600 hover:text-emerald-700 font-bold">View all</button>
+            </div>
+            {activity.length > 0 ? (
+              <div className="space-y-3">
+                {activity.slice(0, 5).map((item, idx) => (
+                  <div key={idx} className="flex items-start gap-3 text-xs p-3 bg-slate-50 rounded-lg">
+                    <div className={`p-1.5 rounded-lg ${
+                      item.type === 'FORM' ? 'bg-blue-100 text-blue-600' :
+                      item.type === 'LEAD' ? 'bg-amber-100 text-amber-600' :
+                      'bg-emerald-100 text-emerald-600'
+                    }`}>
+                      {item.type === 'FORM' ? <FileText size={12} /> :
+                       item.type === 'LEAD' ? <Target size={12} /> :
+                       <Receipt size={12} />}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-slate-700">{item.description}</p>
+                      <p className="text-slate-400 text-[10px]">
+                        {new Date(item.timestamp).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 bg-slate-50 rounded-xl">
+                <FileText size={40} className="text-slate-200 mx-auto mb-3" />
+                <p className="text-slate-500 text-sm font-medium mb-3">No activity yet</p>
+                <button 
+                  onClick={() => navigate('/forms/create')}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-500"
+                >
+                  Create First Booking
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Admin & Office: Recent Activity & Pending Approvals */}
+      {(isAdmin || isOffice) && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6">
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 md:p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">
+                Recent Activity
+              </h3>
+              <button onClick={() => navigate('/forms')} className="text-xs text-emerald-600 hover:text-emerald-700 font-bold">View all</button>
+            </div>
+            {activity.length > 0 ? (
+              <div className="space-y-3">
+                {activity.slice(0, 6).map((item, idx) => (
+                  <div key={idx} className="flex items-start gap-3 text-xs">
+                    <div className={`p-1.5 rounded-lg ${
+                      item.type === 'FORM' ? 'bg-blue-100 text-blue-600' :
+                      item.type === 'ENQUIRY' ? 'bg-amber-100 text-amber-600' :
+                      'bg-emerald-100 text-emerald-600'
+                    }`}>
+                      {item.type === 'FORM' ? <FileText size={12} /> :
+                       item.type === 'ENQUIRY' ? <Users size={12} /> :
+                       <Receipt size={12} />}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-slate-700">{item.description}</p>
+                      <p className="text-slate-400 text-[10px]">
+                        {new Date(item.timestamp).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <FileText size={32} className="text-slate-200 mx-auto mb-2" />
+                <p className="text-slate-400 text-sm">No recent activity</p>
+              </div>
+            )}
+          </div>
+
+          {/* Pending Approvals - Admin Only */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4 md:p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
@@ -351,38 +497,8 @@ const Dashboard = () => {
               </div>
             )}
           </div>
-        )}
-
-        {/* Technician: Quick Actions */}
-        {isTechnician && (
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 md:p-6">
-            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Quick Actions</h3>
-            <div className="space-y-3">
-              <button 
-                onClick={() => navigate('/forms/create')}
-                className="w-full flex items-center gap-3 p-3 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors"
-              >
-                <Plus size={18} className="text-blue-600" />
-                <span className="text-sm font-semibold text-blue-700">Create New Booking</span>
-              </button>
-              <button 
-                onClick={() => navigate('/receipts')}
-                className="w-full flex items-center gap-3 p-3 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-colors"
-              >
-                <Receipt size={18} className="text-emerald-600" />
-                <span className="text-sm font-semibold text-emerald-700">Generate Receipt</span>
-              </button>
-              <button 
-                onClick={() => navigate('/customers')}
-                className="w-full flex items-center gap-3 p-3 bg-purple-50 hover:bg-purple-100 rounded-xl transition-colors"
-              >
-                <Users size={18} className="text-purple-600" />
-                <span className="text-sm font-semibold text-purple-700">View Customers</span>
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

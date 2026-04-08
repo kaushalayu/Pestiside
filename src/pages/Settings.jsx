@@ -1,22 +1,45 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
-import { Settings as SettingsIcon, Building2, Phone, Mail, MapPin, Save, User, Shield, Plus, Trash2, DollarSign, Edit2, X } from 'lucide-react';
+import { Settings as SettingsIcon, Building2, Phone, Mail, MapPin, Save, User, Shield, Plus, Trash2, DollarSign, Edit2, X, Beaker, Globe, FileText, Upload } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
+
+const fetchAttSettings = async () => (await api.get('/settings/att-dropdowns')).data.data;
 
 const Settings = () => {
   const { user } = useSelector(state => state.auth);
   const queryClient = useQueryClient();
   const isSuperAdmin = user?.role === 'super_admin';
+  
+  const [activeTab, setActiveTab] = useState('company');
 
   const [companySettings, setCompanySettings] = useState({
     companyName: 'Safe Home Pestochem India Pvt. Ltd.',
-    email: 'info@safehomepest.com',
-    phone: '',
-    address: '',
+    email: 'enquiry@safehomepestochem.in',
+    phone: '25709',
+    website: 'www.safehomepestochem.com',
+    headOffice: {
+      address: 'House No. 780-J, Chaksa Husain, Pachpedwa, Ramjanki Nagar, Basaratpur, Gorakhpur-273004',
+      city: 'Gorakhpur',
+      state: 'UP',
+      pincode: '273004'
+    },
+    regionalOffice: {
+      address: 'H. No-68, Pink City, Sec. 06, Jankipuram Extn., Near Kendria Vihar Colony, Lucknow-226021',
+      city: 'Lucknow',
+      state: 'UP',
+      pincode: '226021'
+    },
     gstNo: '',
-    cinNo: '',
+    cinNo: 'U52100UP2022PTC164278',
+    tanNo: 'ALDS10486A',
+    panNo: 'ABICS5318P',
+    logo: '',
+    defaultServiceType: 'AMC',
+    defaultTaxRate: '18',
+    inventoryMarkupPercent: '10',
+    inventoryUnits: 'L,ML,KG,G,BQ'
   });
 
   const [branchSettings, setBranchSettings] = useState({
@@ -34,10 +57,73 @@ const Settings = () => {
     enabled: isSuperAdmin
   });
 
+  const { data: companyData, isLoading: companyLoading } = useQuery({
+    queryKey: ['companySettings'],
+    queryFn: async () => (await api.get('/company-settings')).data.data,
+    enabled: isSuperAdmin
+  });
+
+  const { data: attSettings, isLoading: attLoading } = useQuery({
+    queryKey: ['attSettings'],
+    queryFn: fetchAttSettings,
+    enabled: isSuperAdmin
+  });
+
+  React.useEffect(() => {
+    if (companyData) {
+      setCompanySettings({
+        companyName: companyData.companyName || '',
+        email: companyData.email || '',
+        phone: companyData.phone || '',
+        website: companyData.website || '',
+        headOffice: companyData.headOffice || { address: '', city: '', state: '', pincode: '' },
+        regionalOffice: companyData.regionalOffice || { address: '', city: '', state: '', pincode: '' },
+        gstNo: companyData.gstNo || '',
+        cinNo: companyData.cinNo || '',
+        tanNo: companyData.tanNo || '',
+        panNo: companyData.panNo || '',
+        logo: companyData.logo || '',
+        defaultServiceType: companyData.defaultServiceType || 'AMC',
+        defaultTaxRate: companyData.defaultTaxRate || '18',
+        inventoryMarkupPercent: companyData.inventoryMarkupPercent || '10',
+        inventoryUnits: companyData.inventoryUnits || 'L,ML,KG,G,BQ'
+      });
+    }
+  }, [companyData]);
+
   const [selectedBranch, setSelectedBranch] = useState(null);
 
   const [newRate, setNewRate] = useState({ serviceName: 'Cockroaches', category: 'Residential', price: '' });
   const [editingRate, setEditingRate] = useState(null);
+
+  const [attLists, setAttLists] = useState({
+    preTreatmentTypes: [],
+    preChemicals: [],
+    preApplicationMethods: [],
+    preBaseSolutions: [],
+    postTreatmentTypes: [],
+    postChemicals: [],
+    postApplicationMethods: [],
+    postBaseSolutions: []
+  });
+
+  const [attPrePost, setAttPrePost] = useState('PRE');
+  const [newItem, setNewItem] = useState({ preTreatmentTypes: '', preChemicals: '', preApplicationMethods: '', preBaseSolutions: '', postTreatmentTypes: '', postChemicals: '', postApplicationMethods: '', postBaseSolutions: '' });
+
+  React.useEffect(() => {
+    if (attSettings) {
+      setAttLists({
+        preTreatmentTypes: attSettings.preTreatmentTypes || [],
+        preChemicals: attSettings.preChemicals || [],
+        preApplicationMethods: attSettings.preApplicationMethods || [],
+        preBaseSolutions: attSettings.preBaseSolutions || [],
+        postTreatmentTypes: attSettings.postTreatmentTypes || [],
+        postChemicals: attSettings.postChemicals || [],
+        postApplicationMethods: attSettings.postApplicationMethods || [],
+        postBaseSolutions: attSettings.postBaseSolutions || []
+      });
+    }
+  }, [attSettings]);
 
   const { data: ratesData, isLoading: ratesLoading } = useQuery({
     queryKey: ['serviceRatesAdmin'],
@@ -99,9 +185,27 @@ const Settings = () => {
     onError: (err) => toast.error(err.response?.data?.message || 'Update failed')
   });
 
+  const companySettingsMutation = useMutation({
+    mutationFn: (data) => api.put('/company-settings', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['companySettings']);
+      toast.success('Company settings updated');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to update company settings')
+  });
+
+  const attSettingsMutation = useMutation({
+    mutationFn: (data) => api.put('/settings/att-dropdowns', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['attSettings']);
+      toast.success('ATT Settings updated');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to update ATT settings')
+  });
+
   const handleCompanySubmit = (e) => {
     e.preventDefault();
-    toast.success('Company settings saved (Demo)');
+    companySettingsMutation.mutate(companySettings);
   };
 
   const handleBranchUpdate = () => {
@@ -109,6 +213,33 @@ const Settings = () => {
       updateMutation.mutate({ id: selectedBranch, data: branchSettings });
     }
   };
+
+  const addAttItem = (field, value) => {
+    if (!value.trim()) return;
+    setAttLists(prev => ({
+      ...prev,
+      [field]: [...prev[field], value.trim()]
+    }));
+  };
+
+  const removeAttItem = (field, index) => {
+    setAttLists(prev => ({
+      ...prev,
+      [field]: prev[field].filter((_, i) => i !== index)
+    }));
+  };
+
+  const saveAttSettings = () => {
+    attSettingsMutation.mutate(attLists);
+  };
+
+  const tabs = [
+    { id: 'general', label: 'General', icon: SettingsIcon },
+    { id: 'company', label: 'Company', icon: Building2 },
+    { id: 'rates', label: 'Service Rates', icon: DollarSign },
+    { id: 'pdf', label: 'PDF Header', icon: FileText },
+    { id: 'att', label: 'ATT Settings', icon: Beaker },
+  ];
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-500 pb-24">
@@ -121,12 +252,96 @@ const Settings = () => {
       </div>
 
       {isSuperAdmin && (
+        <div className="flex gap-2 border-b border-slate-200">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase border-b-2 transition-all ${
+                activeTab === tab.id
+                  ? 'border-slate-900 text-slate-900'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              <tab.icon size={14} />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {isSuperAdmin && activeTab === 'general' && (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="bg-slate-900 px-6 py-3 flex items-center gap-2">
+            <SettingsIcon size={16} className="text-white" />
+            <h2 className="text-xs font-black text-white uppercase">General Settings</h2>
+          </div>
+          <form onSubmit={handleCompanySubmit} className="p-6 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[9px] font-bold text-slate-600 uppercase block mb-1">Default Service Type</label>
+                <select 
+                  value={companySettings.defaultServiceType || ''} 
+                  onChange={e => setCompanySettings({...companySettings, defaultServiceType: e.target.value})}
+                  className="w-full border border-slate-200 rounded-lg p-2 text-xs"
+                >
+                  <option value="">Select Default Service</option>
+                  <option value="AMC">AMC</option>
+                  <option value="ATT">ATT</option>
+                  <option value="GPC">GPC</option>
+                  <option value="BOTH">BOTH</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-600 uppercase block mb-1">Default Tax Rate (%)</label>
+                <input 
+                  type="text"
+                  value={companySettings.defaultTaxRate || ''} 
+                  onChange={e => setCompanySettings({...companySettings, defaultTaxRate: e.target.value})}
+                  placeholder="e.g., 18"
+                  className="w-full border border-slate-200 rounded-lg p-2 text-xs"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-600 uppercase block mb-1">Inventory Markup (%)</label>
+                <input 
+                  type="text"
+                  value={companySettings.inventoryMarkupPercent || ''} 
+                  onChange={e => setCompanySettings({...companySettings, inventoryMarkupPercent: e.target.value})}
+                  placeholder="e.g., 10"
+                  className="w-full border border-slate-200 rounded-lg p-2 text-xs"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-600 uppercase block mb-1">Inventory Units (comma separated)</label>
+                <input 
+                  type="text"
+                  value={companySettings.inventoryUnits || ''} 
+                  onChange={e => setCompanySettings({...companySettings, inventoryUnits: e.target.value})}
+                  placeholder="e.g., L, ML, KG, G, BQ"
+                  className="w-full border border-slate-200 rounded-lg p-2 text-xs"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <button type="submit" disabled={companySettingsMutation.isPending} className="px-6 py-2 bg-brand-600 text-white rounded-lg text-xs font-medium flex items-center gap-2 disabled:opacity-50">
+                <Save size={14} /> {companySettingsMutation.isPending ? 'Saving...' : 'Save General Settings'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {isSuperAdmin && activeTab === 'company' && (
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           <div className="bg-slate-900 px-6 py-3 flex items-center gap-2">
             <Building2 size={16} className="text-white" />
             <h2 className="text-xs font-black text-white uppercase">Company Profile</h2>
           </div>
           <form onSubmit={handleCompanySubmit} className="p-6 space-y-4">
+            {companyLoading ? (
+              <div className="text-center py-4 text-slate-400 text-xs">Loading...</div>
+            ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-[9px] font-bold text-slate-600 uppercase block mb-1">Company Name</label>
@@ -149,9 +364,11 @@ const Settings = () => {
                 <input value={companySettings.address} onChange={e => setCompanySettings({...companySettings, address: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2 text-xs" />
               </div>
             </div>
-            <div className="flex justify-end">
-              <button type="submit" className="px-6 py-2 bg-brand-600 text-white rounded-lg text-xs font-medium flex items-center gap-2">
-                <Save size={14} /> Save Company Settings
+          )}
+
+          <div className="flex justify-end">
+              <button type="submit" disabled={companySettingsMutation.isPending} className="px-6 py-2 bg-brand-600 text-white rounded-lg text-xs font-medium flex items-center gap-2 disabled:opacity-50">
+                <Save size={14} /> {companySettingsMutation.isPending ? 'Saving...' : 'Save Company Settings'}
               </button>
             </div>
           </form>
@@ -234,7 +451,7 @@ const Settings = () => {
         </div>
       </div>
 
-      {isSuperAdmin && (
+      {isSuperAdmin && activeTab === 'rates' && (
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           <div className="bg-emerald-600 px-6 py-3 flex items-center gap-2">
             <DollarSign size={16} className="text-white" />
@@ -372,6 +589,262 @@ const Settings = () => {
         </div>
       )}
 
+      {isSuperAdmin && activeTab === 'pdf' && (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="bg-blue-600 px-6 py-3 flex items-center gap-2">
+            <FileText size={16} className="text-white" />
+            <h2 className="text-xs font-black text-white uppercase">PDF Header Settings</h2>
+          </div>
+          <form onSubmit={handleCompanySubmit} className="p-6 space-y-6">
+            {/* Logo Upload */}
+            <div>
+              <label className="text-[9px] font-bold text-slate-600 uppercase block mb-2">Company Logo (for PDF)</label>
+              <div className="flex items-center gap-4">
+                <div className="w-20 h-20 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center bg-slate-50">
+                  {companySettings.logo ? (
+                    <img src={companySettings.logo} alt="Logo" className="w-full h-full object-contain p-1" />
+                  ) : (
+                    <Upload size={24} className="text-slate-400" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <input 
+                    type="text" 
+                    value={companySettings.logo || ''}
+                    onChange={e => setCompanySettings({...companySettings, logo: e.target.value})}
+                    placeholder="Paste logo URL here (https://...)"
+                    className="w-full border border-slate-200 rounded-lg p-2 text-xs mb-2"
+                  />
+                  <p className="text-[10px] text-slate-400">Or enter image URL</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Company Info */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[9px] font-bold text-slate-600 uppercase block mb-1">Company Name</label>
+                <input value={companySettings.companyName} onChange={e => setCompanySettings({...companySettings, companyName: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2 text-xs" />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-600 uppercase block mb-1">Website</label>
+                <input value={companySettings.website} onChange={e => setCompanySettings({...companySettings, website: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2 text-xs" placeholder="www.example.com" />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-600 uppercase block mb-1">Email</label>
+                <input value={companySettings.email} onChange={e => setCompanySettings({...companySettings, email: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2 text-xs" />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-600 uppercase block mb-1">Phone</label>
+                <input value={companySettings.phone} onChange={e => setCompanySettings({...companySettings, phone: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2 text-xs" />
+              </div>
+            </div>
+
+            {/* Head Office */}
+            <div className="p-4 bg-slate-50 rounded-xl">
+              <h3 className="text-xs font-bold text-slate-700 uppercase mb-3">Head Office</h3>
+              <textarea value={companySettings.headOffice?.address || ''} onChange={e => setCompanySettings({...companySettings, headOffice: {...companySettings.headOffice, address: e.target.value}})} className="w-full border border-slate-200 rounded-lg p-2 text-xs" rows={2} placeholder="Full address" />
+            </div>
+
+            {/* Regional Office */}
+            <div className="p-4 bg-slate-50 rounded-xl">
+              <h3 className="text-xs font-bold text-slate-700 uppercase mb-3">Regional Office</h3>
+              <textarea value={companySettings.regionalOffice?.address || ''} onChange={e => setCompanySettings({...companySettings, regionalOffice: {...companySettings.regionalOffice, address: e.target.value}})} className="w-full border border-slate-200 rounded-lg p-2 text-xs" rows={2} placeholder="Full address" />
+            </div>
+
+            {/* Tax Details */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="text-[9px] font-bold text-slate-600 uppercase block mb-1">CIN Number</label>
+                <input value={companySettings.cinNo} onChange={e => setCompanySettings({...companySettings, cinNo: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2 text-xs" />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-600 uppercase block mb-1">TAN Number</label>
+                <input value={companySettings.tanNo} onChange={e => setCompanySettings({...companySettings, tanNo: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2 text-xs" />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-600 uppercase block mb-1">PAN Number</label>
+                <input value={companySettings.panNo} onChange={e => setCompanySettings({...companySettings, panNo: e.target.value})} className="w-full border border-slate-200 rounded-lg p-2 text-xs" />
+              </div>
+            </div>
+
+            <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm">
+              Save PDF Settings
+            </button>
+          </form>
+        </div>
+      )}
+
+      {isSuperAdmin && activeTab === 'att' && (
+        <div className="space-y-6">
+          {/* Pre/Post Toggle */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="bg-slate-800 px-6 py-4 flex items-center justify-center gap-4">
+              <button
+                onClick={() => setAttPrePost('PRE')}
+                className={`flex-1 py-3 px-6 rounded-xl font-bold text-sm transition-all ${
+                  attPrePost === 'PRE' 
+                    ? 'bg-blue-600 text-white shadow-lg' 
+                    : 'bg-white text-slate-600 border-2 border-slate-200 hover:border-blue-400'
+                }`}>
+                PRE-TREATMENT SETTINGS
+              </button>
+              <button
+                onClick={() => setAttPrePost('POST')}
+                className={`flex-1 py-3 px-6 rounded-xl font-bold text-sm transition-all ${
+                  attPrePost === 'POST' 
+                    ? 'bg-emerald-600 text-white shadow-lg' 
+                    : 'bg-white text-slate-600 border-2 border-slate-200 hover:border-emerald-400'
+                }`}>
+                POST-TREATMENT SETTINGS
+              </button>
+            </div>
+          </div>
+
+          {attPrePost === 'PRE' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="bg-blue-900 px-6 py-3 flex items-center gap-2">
+                  <Beaker size={16} className="text-white" />
+                  <h2 className="text-xs font-black text-white uppercase">Pre-Treatment Types</h2>
+                </div>
+                <div className="p-4">
+                  <div className="flex gap-2 mb-3">
+                    <input type="text" value={newItem.preTreatmentTypes} onChange={(e) => setNewItem(prev => ({ ...prev, preTreatmentTypes: e.target.value }))} placeholder="Add new treatment type" className="flex-1 px-3 py-2 border rounded-lg text-sm" />
+                    <button onClick={() => { addAttItem('preTreatmentTypes', newItem.preTreatmentTypes); setNewItem(prev => ({ ...prev, preTreatmentTypes: '' })); }} className="px-4 py-2 bg-blue-900 text-white rounded-lg"><Plus size={16} /></button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {attLists.preTreatmentTypes.map((item, i) => <span key={i} className="px-3 py-1 bg-blue-50 text-blue-700 text-xs rounded-full flex items-center gap-1">{item}<button onClick={() => removeAttItem('preTreatmentTypes', i)}><X size={12} /></button></span>)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="bg-green-900 px-6 py-3 flex items-center gap-2">
+                  <Beaker size={16} className="text-white" />
+                  <h2 className="text-xs font-black text-white uppercase">Pre-Chemicals</h2>
+                </div>
+                <div className="p-4">
+                  <div className="flex gap-2 mb-3">
+                    <input type="text" value={newItem.preChemicals} onChange={(e) => setNewItem(prev => ({ ...prev, preChemicals: e.target.value }))} placeholder="Add new chemical" className="flex-1 px-3 py-2 border rounded-lg text-sm" />
+                    <button onClick={() => { addAttItem('preChemicals', newItem.preChemicals); setNewItem(prev => ({ ...prev, preChemicals: '' })); }} className="px-4 py-2 bg-green-900 text-white rounded-lg"><Plus size={16} /></button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {attLists.preChemicals.map((item, i) => <span key={i} className="px-3 py-1 bg-green-50 text-green-700 text-xs rounded-full flex items-center gap-1">{item}<button onClick={() => removeAttItem('preChemicals', i)}><X size={12} /></button></span>)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="bg-purple-900 px-6 py-3 flex items-center gap-2">
+                  <Beaker size={16} className="text-white" />
+                  <h2 className="text-xs font-black text-white uppercase">Pre-Application Methods</h2>
+                </div>
+                <div className="p-4">
+                  <div className="flex gap-2 mb-3">
+                    <input type="text" value={newItem.preApplicationMethods} onChange={(e) => setNewItem(prev => ({ ...prev, preApplicationMethods: e.target.value }))} placeholder="Add new method" className="flex-1 px-3 py-2 border rounded-lg text-sm" />
+                    <button onClick={() => { addAttItem('preApplicationMethods', newItem.preApplicationMethods); setNewItem(prev => ({ ...prev, preApplicationMethods: '' })); }} className="px-4 py-2 bg-purple-900 text-white rounded-lg"><Plus size={16} /></button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {attLists.preApplicationMethods.map((item, i) => <span key={i} className="px-3 py-1 bg-purple-50 text-purple-700 text-xs rounded-full flex items-center gap-1">{item}<button onClick={() => removeAttItem('preApplicationMethods', i)}><X size={12} /></button></span>)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="bg-amber-900 px-6 py-3 flex items-center gap-2">
+                  <Beaker size={16} className="text-white" />
+                  <h2 className="text-xs font-black text-white uppercase">Pre-Base Solutions</h2>
+                </div>
+                <div className="p-4">
+                  <div className="flex gap-2 mb-3">
+                    <input type="text" value={newItem.preBaseSolutions} onChange={(e) => setNewItem(prev => ({ ...prev, preBaseSolutions: e.target.value }))} placeholder="Add new base solution" className="flex-1 px-3 py-2 border rounded-lg text-sm" />
+                    <button onClick={() => { addAttItem('preBaseSolutions', newItem.preBaseSolutions); setNewItem(prev => ({ ...prev, preBaseSolutions: '' })); }} className="px-4 py-2 bg-amber-900 text-white rounded-lg"><Plus size={16} /></button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {attLists.preBaseSolutions.map((item, i) => <span key={i} className="px-3 py-1 bg-amber-50 text-amber-700 text-xs rounded-full flex items-center gap-1">{item}<button onClick={() => removeAttItem('preBaseSolutions', i)}><X size={12} /></button></span>)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {attPrePost === 'POST' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="bg-blue-900 px-6 py-3 flex items-center gap-2">
+                  <Beaker size={16} className="text-white" />
+                  <h2 className="text-xs font-black text-white uppercase">Post-Treatment Types</h2>
+                </div>
+                <div className="p-4">
+                  <div className="flex gap-2 mb-3">
+                    <input type="text" value={newItem.postTreatmentTypes} onChange={(e) => setNewItem(prev => ({ ...prev, postTreatmentTypes: e.target.value }))} placeholder="Add new treatment type" className="flex-1 px-3 py-2 border rounded-lg text-sm" />
+                    <button onClick={() => { addAttItem('postTreatmentTypes', newItem.postTreatmentTypes); setNewItem(prev => ({ ...prev, postTreatmentTypes: '' })); }} className="px-4 py-2 bg-blue-900 text-white rounded-lg"><Plus size={16} /></button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {attLists.postTreatmentTypes.map((item, i) => <span key={i} className="px-3 py-1 bg-blue-50 text-blue-700 text-xs rounded-full flex items-center gap-1">{item}<button onClick={() => removeAttItem('postTreatmentTypes', i)}><X size={12} /></button></span>)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="bg-green-900 px-6 py-3 flex items-center gap-2">
+                  <Beaker size={16} className="text-white" />
+                  <h2 className="text-xs font-black text-white uppercase">Post-Chemicals</h2>
+                </div>
+                <div className="p-4">
+                  <div className="flex gap-2 mb-3">
+                    <input type="text" value={newItem.postChemicals} onChange={(e) => setNewItem(prev => ({ ...prev, postChemicals: e.target.value }))} placeholder="Add new chemical" className="flex-1 px-3 py-2 border rounded-lg text-sm" />
+                    <button onClick={() => { addAttItem('postChemicals', newItem.postChemicals); setNewItem(prev => ({ ...prev, postChemicals: '' })); }} className="px-4 py-2 bg-green-900 text-white rounded-lg"><Plus size={16} /></button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {attLists.postChemicals.map((item, i) => <span key={i} className="px-3 py-1 bg-green-50 text-green-700 text-xs rounded-full flex items-center gap-1">{item}<button onClick={() => removeAttItem('postChemicals', i)}><X size={12} /></button></span>)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="bg-purple-900 px-6 py-3 flex items-center gap-2">
+                  <Beaker size={16} className="text-white" />
+                  <h2 className="text-xs font-black text-white uppercase">Post-Application Methods</h2>
+                </div>
+                <div className="p-4">
+                  <div className="flex gap-2 mb-3">
+                    <input type="text" value={newItem.postApplicationMethods} onChange={(e) => setNewItem(prev => ({ ...prev, postApplicationMethods: e.target.value }))} placeholder="Add new method" className="flex-1 px-3 py-2 border rounded-lg text-sm" />
+                    <button onClick={() => { addAttItem('postApplicationMethods', newItem.postApplicationMethods); setNewItem(prev => ({ ...prev, postApplicationMethods: '' })); }} className="px-4 py-2 bg-purple-900 text-white rounded-lg"><Plus size={16} /></button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {attLists.postApplicationMethods.map((item, i) => <span key={i} className="px-3 py-1 bg-purple-50 text-purple-700 text-xs rounded-full flex items-center gap-1">{item}<button onClick={() => removeAttItem('postApplicationMethods', i)}><X size={12} /></button></span>)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="bg-amber-900 px-6 py-3 flex items-center gap-2">
+                  <Beaker size={16} className="text-white" />
+                  <h2 className="text-xs font-black text-white uppercase">Post-Base Solutions</h2>
+                </div>
+                <div className="p-4">
+                  <div className="flex gap-2 mb-3">
+                    <input type="text" value={newItem.postBaseSolutions} onChange={(e) => setNewItem(prev => ({ ...prev, postBaseSolutions: e.target.value }))} placeholder="Add new base solution" className="flex-1 px-3 py-2 border rounded-lg text-sm" />
+                    <button onClick={() => { addAttItem('postBaseSolutions', newItem.postBaseSolutions); setNewItem(prev => ({ ...prev, postBaseSolutions: '' })); }} className="px-4 py-2 bg-amber-900 text-white rounded-lg"><Plus size={16} /></button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {attLists.postBaseSolutions.map((item, i) => <span key={i} className="px-3 py-1 bg-amber-50 text-amber-700 text-xs rounded-full flex items-center gap-1">{item}<button onClick={() => removeAttItem('postBaseSolutions', i)}><X size={12} /></button></span>)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end">
+            <button onClick={saveAttSettings} disabled={attSettingsMutation.isPending} className="px-6 py-3 bg-slate-900 text-white rounded-xl font-bold text-sm flex items-center gap-2">
+              <Save size={16} />{attSettingsMutation.isPending ? 'Saving...' : 'Save ATT Settings'}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
         <div className="bg-slate-900 px-6 py-3 flex items-center gap-2">
           <Shield size={16} className="text-white" />
@@ -389,7 +862,11 @@ const Settings = () => {
             </div>
             <div>
               <p className="text-[9px] font-bold text-slate-500 uppercase">Role</p>
-              <p className="text-sm font-medium text-slate-900 uppercase">{user?.role?.replace('_', ' ')}</p>
+              <p className="text-sm font-medium text-slate-900 uppercase">
+                {user?.role === 'super_admin' ? 'Super Admin' : 
+                 user?.role === 'branch_admin' && user?.branchId?.branchName ? user.branchId.branchName : 
+                 user?.role?.replace('_', ' ')}
+              </p>
             </div>
             <div>
               <p className="text-[9px] font-bold text-slate-500 uppercase">Branch</p>

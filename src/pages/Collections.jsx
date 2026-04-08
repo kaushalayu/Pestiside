@@ -1,55 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useSelector } from 'react-redux';
+import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
-import { IndianRupee, TrendingUp, Users as UsersIcon, Calendar, Filter, Database, Wallet, CreditCard, ChevronRight, RefreshCw, Lock } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { IndianRupee, TrendingUp, Users as UsersIcon, RefreshCw, Lock } from 'lucide-react';
 
 const Collections = () => {
   const { user } = useSelector(state => state.auth);
   const isAdmin = user?.role === 'super_admin' || user?.role === 'branch_admin';
-  const [loading, setLoading] = useState(true);
-  const [accessDenied, setAccessDenied] = useState(false);
-  const [data, setData] = useState({ summary: { totalOverall: 0, totalToday: 0 }, details: [] });
 
-  const fetchCollections = async () => {
-    if (!isAdmin) {
-      setAccessDenied(true);
-      setLoading(false);
-      return;
-    }
-    try {
-      setLoading(true);
+  const { data: collectionsData, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ['collections-stats'],
+    queryFn: async () => {
       const res = await api.get('/collections/stats');
-      if (res.data?.success) {
-        setData(res.data.data);
-      }
-    } catch (error) {
-      if (error.response?.status === 403) {
-        setAccessDenied(true);
-      } else {
-        toast.error(error.response?.data?.message || 'Collection Ledger Unavailable');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+      return res.data?.data || { summary: { totalOverall: 0, totalToday: 0 }, details: [] };
+    },
+    enabled: isAdmin,
+    staleTime: 0,
+    refetchInterval: 5000,
+  });
 
-  useEffect(() => {
-    fetchCollections();
-  }, [user]);
-
-  if (loading) {
+  if (!isAdmin) {
     return (
-      <div className="flex flex-col h-screen items-center justify-center gap-4">
-        <div className="w-8 h-8 rounded-xl border-4 border-slate-900 border-t-emerald-500 animate-spin"></div>
-        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Auditing Revenue...</p>
-      </div>
-    );
-  }
-
-  if (accessDenied) {
-    return (
-      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-500 pb-20">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-8 pb-20">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-xl md:text-2xl font-display font-black text-slate-900 tracking-tight uppercase">Revenue Ledger</h1>
@@ -70,8 +42,19 @@ const Collections = () => {
     );
   }
 
+  if (isLoading) {
+    return (
+      <div className="flex flex-col h-screen items-center justify-center gap-4">
+        <div className="w-8 h-8 rounded-xl border-4 border-slate-900 border-t-emerald-500 animate-spin"></div>
+        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Auditing Revenue...</p>
+      </div>
+    );
+  }
+
+  const data = collectionsData || { summary: { totalOverall: 0, totalToday: 0 }, details: [] };
+
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-500 pb-20">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-8 pb-20">
       
       {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -83,11 +66,10 @@ const Collections = () => {
           </p>
         </div>
         <button 
-           onClick={fetchCollections}
-           disabled={loading}
-           className="px-6 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl transition-all font-black text-[10px] uppercase tracking-widest active:scale-95 border-b-4 border-slate-700 hover:border-slate-800 disabled:opacity-50 flex items-center gap-2"
+           onClick={() => refetch()}
+           className="px-6 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl transition-all font-black text-[10px] uppercase tracking-widest active:scale-95 border-b-4 border-slate-700 hover:border-slate-800 flex items-center gap-2"
         >
-           {loading ? <RefreshCw size={14} className="animate-spin" /> : null}
+           {isFetching ? <RefreshCw size={14} className="animate-spin" /> : null}
            Sync Registry
         </button>
       </div>

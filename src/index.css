@@ -36,6 +36,7 @@
   html {
     font-size: 16px;
     -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
   }
   
   body {
@@ -44,6 +45,7 @@
     color: var(--color-slate-800);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    -webkit-overflow-scrolling: touch;
   }
 
   @media (max-width: 640px) {
@@ -78,6 +80,22 @@
 }
 
 @layer utilities {
+  /* Hide all scrollbars - prevent horizontal scroll */
+  * {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+  
+  *::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
+  html, body {
+    overflow-x: hidden !important;
+  }
+
   /* Touch-friendly utilities */
   .touch-manipulation {
     touch-action: manipulation;
@@ -89,34 +107,45 @@
 
   /* Responsive text utilities */
   @media (max-width: 640px) {
-    .text-xs { font-size: 0.75rem; }
-    .text-sm { font-size: 0.8125rem; }
-    .text-base { font-size: 0.9375rem; }
-    .text-lg { font-size: 1.0625rem; }
-    .text-xl { font-size: 1.125rem; }
-    .text-2xl { font-size: 1.25rem; }
+    .text-xs { font-size: 0.75rem; line-height: 1rem; }
+    .text-sm { font-size: 0.8125rem; line-height: 1.125rem; }
+    .text-base { font-size: 0.9375rem; line-height: 1.375rem; }
+    .text-lg { font-size: 1.0625rem; line-height: 1.5rem; }
+    .text-xl { font-size: 1.125rem; line-height: 1.625rem; }
+    .text-2xl { font-size: 1.25rem; line-height: 1.75rem; }
+    .text-3xl { font-size: 1.5rem; line-height: 2rem; }
   }
 
   /* Responsive padding utilities */
   @media (max-width: 640px) {
-    .p-4 { padding: 0.75rem; }
+    .p-2 { padding: 0.5rem; }
+    .p-3 { padding: 0.75rem; }
+    .p-4 { padding: 0.875rem; }
     .p-5 { padding: 1rem; }
-    .p-6 { padding: 1.25rem; }
-    .px-4 { padding-left: 0.75rem; padding-right: 0.75rem; }
-    .py-4 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+    .p-6 { padding: 1.125rem; }
+    .p-8 { padding: 1.25rem; }
+    .px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+    .px-4 { padding-left: 0.875rem; padding-right: 0.875rem; }
+    .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+    .py-4 { padding-top: 0.875rem; padding-bottom: 0.875rem; }
   }
 
   /* Responsive margin utilities */
   @media (max-width: 640px) {
-    .m-4 { margin: 0.75rem; }
-    .mx-4 { margin-left: 0.75rem; margin-right: 0.75rem; }
-    .my-4 { margin-top: 0.75rem; margin-bottom: 0.75rem; }
+    .m-4 { margin: 0.875rem; }
+    .mx-4 { margin-left: 0.875rem; margin-right: 0.875rem; }
+    .my-4 { margin-top: 0.875rem; margin-bottom: 0.875rem; }
+    .mt-4 { margin-top: 0.875rem; }
+    .mb-4 { margin-bottom: 0.875rem; }
+    .ml-4 { margin-left: 0.875rem; }
+    .mr-4 { margin-right: 0.875rem; }
   }
 
   /* Mobile-friendly flex utilities */
   @media (max-width: 640px) {
     .flex-row { flex-direction: row; }
     .flex-col { flex-direction: column; }
+    .flex-wrap { flex-wrap: wrap; }
   }
 
   /* Responsive grid utilities */
@@ -127,28 +156,109 @@
     .grid-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 
+  /* Tablet grid utilities */
+  @media (min-width: 641px) and (max-width: 1024px) {
+    .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .md\:grid-cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+
   /* Responsive gap utilities */
   @media (max-width: 640px) {
-    .gap-3 { gap: 0.5rem; }
-    .gap-4 { gap: 0.75rem; }
+    .gap-1 { gap: 0.25rem; }
+    .gap-2 { gap: 0.5rem; }
+    .gap-3 { gap: 0.625rem; }
+    .gap-4 { gap: 0.875rem; }
     .gap-5 { gap: 1rem; }
-    .gap-6 { gap: 1.25rem; }
+    .gap-6 { gap: 1.125rem; }
   }
 
   /* Full width on mobile */
   @media (max-width: 640px) {
     .w-full { width: 100%; }
     .max-w-full { max-width: 100%; }
+    .max-w-sm { max-width: 100%; }
+    .max-w-md { max-width: 100%; }
+    .max-w-lg { max-width: 100%; }
+    .max-w-xl { max-width: 100%; }
   }
 
   /* Hide on mobile */
   @media (max-width: 640px) {
-    .hidden-mobile { display: none; }
+    .hidden-mobile { display: none !important; }
+    .hidden { display: none; }
   }
 
   /* Show on mobile only */
   @media (min-width: 641px) {
-    .show-mobile-only { display: none; }
+    .show-mobile-only { display: none !important; }
+  }
+
+  /* Responsive table scroll */
+  @media (max-width: 768px) {
+    .table-container {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .table-container table {
+      min-width: 600px;
+    }
+  }
+
+  /* Mobile safe area insets */
+  @supports (padding-top: env(safe-area-inset-top)) {
+    .safe-top { padding-top: env(safe-area-inset-top); }
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+    .safe-left { padding-left: env(safe-area-inset-left); }
+    .safe-right { padding-right: env(safe-area-inset-right); }
+  }
+
+  /* Responsive font sizes for headings */
+  @media (max-width: 640px) {
+    h1, .h1 { font-size: 1.5rem !important; line-height: 2rem !important; }
+    h2, .h2 { font-size: 1.25rem !important; line-height: 1.75rem !important; }
+    h3, .h3 { font-size: 1.125rem !important; line-height: 1.5rem !important; }
+    h4, .h4 { font-size: 1rem !important; line-height: 1.375rem !important; }
+  }
+
+  /* Mobile touch targets */
+  @media (max-width: 640px) {
+    button, a, [role="button"] {
+      min-height: 44px;
+      min-width: 44px;
+    }
+    input, select, textarea {
+      min-height: 44px;
+    }
+    .touch-target-sm {
+      min-height: 36px;
+      min-width: 36px;
+    }
+  }
+
+  /* Responsive border radius */
+  @media (max-width: 640px) {
+    .rounded-lg { border-radius: 0.5rem; }
+    .rounded-xl { border-radius: 0.625rem; }
+    .rounded-2xl { border-radius: 0.875rem; }
+  }
+
+  /* Prevent zoom on inputs on iOS */
+  @media (max-width: 640px) {
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"],
+    input[type="number"],
+    input[type="password"],
+    textarea,
+    select {
+      font-size: 16px;
+    }
+  }
+
+  /* Responsive shadow */
+  @media (max-width: 640px) {
+    .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+    .shadow-xl { box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); }
   }
 
   .glass-panel {

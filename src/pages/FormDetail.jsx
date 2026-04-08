@@ -2,8 +2,8 @@ import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { 
-  FileText, Download, ArrowLeft, User, Phone, 
+import {
+  FileText, Download, ArrowLeft, User, Phone,
   MapPin, ShieldCheck, PenTool, IndianRupee,
   CheckCircle2, Clock, Calendar, Truck, Building2, Home, X, Receipt, Plus, Camera
 } from 'lucide-react';
@@ -23,7 +23,7 @@ const STATUS_CONFIG = {
 
 const CANCELLABLE_STATES = ['DRAFT', 'SUBMITTED', 'SCHEDULED'];
 
-  const FormDetail = () => {
+const FormDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -64,7 +64,13 @@ const CANCELLABLE_STATES = ['DRAFT', 'SUBMITTED', 'SCHEDULED'];
       setPaymentData({ advancePaid: '', paymentMode: 'CASH', transactionId: '', notes: '' });
       setPaymentScreenshot(null);
       setScreenshotPreview(null);
-      queryClient.invalidateQueries(['form', id]);
+      queryClient.invalidateQueries({ queryKey: ['form', id] });
+      queryClient.invalidateQueries({ queryKey: ['forms'] });
+      queryClient.invalidateQueries({ queryKey: ['receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['forms-pending-payment'] });
+      queryClient.invalidateQueries({ queryKey: ['collections'] });
+      queryClient.invalidateQueries({ queryKey: ['collections-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
     onError: (_err) => {
       toast.error(_err.response?.data?.message || 'Failed to generate receipt');
@@ -76,13 +82,13 @@ const CANCELLABLE_STATES = ['DRAFT', 'SUBMITTED', 'SCHEDULED'];
     if (file) {
       const reader = new FileReader();
       reader.onload = (e) => {
-        const img = new Image();
+        const img = new window.Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
           const maxSize = 1200;
           let width = img.width;
           let height = img.height;
-          
+
           if (width > height && width > maxSize) {
             height = (height * maxSize) / width;
             width = maxSize;
@@ -90,13 +96,13 @@ const CANCELLABLE_STATES = ['DRAFT', 'SUBMITTED', 'SCHEDULED'];
             width = (width * maxSize) / height;
             height = maxSize;
           }
-          
+
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
           const compressed = canvas.toDataURL('image/jpeg', 0.7);
-          
+
           setPaymentScreenshot(compressed);
           setScreenshotPreview(compressed);
         };
@@ -154,16 +160,16 @@ const CANCELLABLE_STATES = ['DRAFT', 'SUBMITTED', 'SCHEDULED'];
 
   if (isLoading) return (
     <div className="flex flex-col h-[70vh] items-center justify-center gap-4">
-       <div className="w-10 h-10 border-4 border-slate-100 border-t-brand-500 rounded-full animate-spin"></div>
-       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Loading...</p>
+      <div className="w-10 h-10 border-4 border-slate-100 border-t-brand-500 rounded-full animate-spin"></div>
+      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Loading...</p>
     </div>
   );
 
   if (error || !form) return (
     <div className="p-10 text-center space-y-4">
-       <FileText size={40} className="mx-auto text-slate-200" />
-       <h2 className="text-xl font-black text-slate-900 uppercase">Form Not Found</h2>
-       <button onClick={() => navigate('/forms')} className="px-6 py-2 bg-slate-900 text-white text-[10px] font-black uppercase rounded-lg">Back to Forms</button>
+      <FileText size={40} className="mx-auto text-slate-200" />
+      <h2 className="text-xl font-black text-slate-900 uppercase">Form Not Found</h2>
+      <button onClick={() => navigate('/forms')} className="px-6 py-2 bg-slate-900 text-white text-[10px] font-black uppercase rounded-lg">Back to Forms</button>
     </div>
   );
 
@@ -172,82 +178,81 @@ const CANCELLABLE_STATES = ['DRAFT', 'SUBMITTED', 'SCHEDULED'];
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-500 pb-20 font-sans">
-      
+
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex items-center gap-4">
-           <button onClick={() => navigate('/forms')} className="p-3 bg-white border-2 border-slate-200 text-slate-400 hover:text-slate-900 hover:border-slate-900 rounded-xl transition-all">
-              <ArrowLeft size={20} />
-           </button>
-           <div>
-              <div className="flex items-center gap-3">
-                 <h1 className="text-2xl font-black text-slate-900 uppercase">{form.orderNo || 'DRAFT'}</h1>
-                 <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase border-2 ${statusInfo.color}`}>
-                    {statusInfo.label}
-                 </span>
-              </div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">
-                 Created: {form.createdAt ? new Date(form.createdAt).toLocaleDateString('en-IN') : 'N/A'}
-              </p>
-           </div>
+          <button onClick={() => navigate('/forms')} className="p-3 bg-white border-2 border-slate-200 text-slate-400 hover:text-slate-900 hover:border-slate-900 rounded-xl transition-all">
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-black text-slate-900 uppercase">{form.orderNo || 'DRAFT'}</h1>
+              <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase border-2 ${statusInfo.color}`}>
+                {statusInfo.label}
+              </span>
+            </div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">
+              Created: {form.createdAt ? new Date(form.createdAt).toLocaleDateString('en-IN') : 'N/A'}
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
-           <button 
-              onClick={handleDownloadPdf}
-              className="px-6 py-3 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-black transition-all flex items-center gap-2"
-           >
-              <Download size={16} /> Download PDF
-           </button>
-           {isAdmin && (
-             <>
-               {form?.status === 'COMPLETED' ? (
-                 <button 
-                    onClick={() => setShowPaymentModal(true)}
-                    className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-emerald-700 transition-all flex items-center gap-2"
-                 >
-                    <Receipt size={16} /> Generate Receipt
-                 </button>
-               ) : (
-                 <div className="px-6 py-3 bg-slate-100 text-slate-500 rounded-xl text-xs flex items-center gap-2">
-                   <Clock size={14} /> Receipt available after service completion
-                 </div>
-               )}
-             </>
-           )}
+          <button
+            onClick={handleDownloadPdf}
+            className="px-6 py-3 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-black transition-all flex items-center gap-2"
+          >
+            <Download size={16} /> Download PDF
+          </button>
+          {isAdmin && (
+            <>
+              {form?.status === 'COMPLETED' ? (
+                <button
+                  onClick={() => setShowPaymentModal(true)}
+                  className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-emerald-700 transition-all flex items-center gap-2"
+                >
+                  <Receipt size={16} /> Generate Receipt
+                </button>
+              ) : (
+                <div className="px-6 py-3 bg-slate-100 text-slate-500 rounded-xl text-xs flex items-center gap-2">
+                  <Clock size={14} /> Receipt available after service completion
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
 
       {/* Status Update - Only for Admin */}
       {isAdmin && (
         <div className="bg-slate-800 p-4 rounded-xl flex items-center gap-2 flex-wrap">
-           <span className="text-white text-xs font-bold uppercase mr-2">Update Status:</span>
-           {STATUS_OPTIONS.map(status => {
-             const info = STATUS_CONFIG[status];
-             const isCurrent = status === currentStatus;
-             const isNext = statusInfo.next === status;
-             const isCancellable = status === 'CANCELLED' && CANCELLABLE_STATES.includes(currentStatus);
-             const canChange = statusMutation.isPending || isCurrent || (!isNext && !isCancellable && status !== currentStatus);
-             
-             return (
-               <button
-                 key={status}
-                 disabled={canChange}
-                 onClick={() => statusMutation.mutate({ status })}
-                 className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${
-                   isCurrent 
-                     ? `${info.color} border-2 cursor-default` 
-                     : isNext || isCancellable
-                       ? status === 'CANCELLED'
-                         ? 'bg-red-500 text-white hover:bg-red-400'
-                         : 'bg-emerald-500 text-white hover:bg-emerald-400' 
-                       : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                 }`}
-               >
-                 {info.label}
-               </button>
-             );
-           })}
+          <span className="text-white text-xs font-bold uppercase mr-2">Update Status:</span>
+          {STATUS_OPTIONS.map(status => {
+            const info = STATUS_CONFIG[status];
+            const isCurrent = status === currentStatus;
+            const isNext = statusInfo.next === status;
+            const isCancellable = status === 'CANCELLED' && CANCELLABLE_STATES.includes(currentStatus);
+            const canChange = statusMutation.isPending || isCurrent || (!isNext && !isCancellable && status !== currentStatus);
+
+            return (
+              <button
+                key={status}
+                disabled={canChange}
+                onClick={() => statusMutation.mutate({ status })}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${isCurrent
+                    ? `${info.color} border-2 cursor-default`
+                    : isNext || isCancellable
+                      ? status === 'CANCELLED'
+                        ? 'bg-red-500 text-white hover:bg-red-400'
+                        : 'bg-emerald-500 text-white hover:bg-emerald-400'
+                      : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                  }`}
+              >
+                {info.label}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -359,7 +364,7 @@ const CANCELLABLE_STATES = ['DRAFT', 'SUBMITTED', 'SCHEDULED'];
             </div>
             <div className="flex justify-between">
               <span className="text-[10px] font-bold text-slate-400 uppercase">Floors</span>
-              <span className="text-xs font-bold text-slate-900">{form.premises?.floors || '-'}</span>
+              <span className="text-xs font-bold text-slate-900">{form.premises?.floors?.length ? `${form.premises.floors.length} floor(s)` : '-'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[10px] font-bold text-slate-400 uppercase">Rooms</span>
@@ -452,14 +457,14 @@ const CANCELLABLE_STATES = ['DRAFT', 'SUBMITTED', 'SCHEDULED'];
             <div>
               <span className="text-[10px] font-bold text-slate-400 uppercase block">Total KM</span>
               <span className="text-xs font-bold text-slate-900">
-                {form.logistics?.endMeter && form.logistics?.startMeter 
-                  ? parseInt(form.logistics.endMeter) - parseInt(form.logistics.startMeter) 
+                {form.logistics?.endMeter && form.logistics?.startMeter
+                  ? parseInt(form.logistics.endMeter) - parseInt(form.logistics.startMeter)
                   : '-'}
               </span>
             </div>
-           </div>
-         </div>
-       )}
+          </div>
+        </div>
+      )}
 
       {/* Payment Modal */}
       {showPaymentModal && (
@@ -473,7 +478,7 @@ const CANCELLABLE_STATES = ['DRAFT', 'SUBMITTED', 'SCHEDULED'];
                 <X size={20} />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-4">
               <div className="bg-slate-50 rounded-xl p-4 space-y-2">
                 <div className="flex justify-between text-sm">

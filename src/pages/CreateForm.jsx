@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
 import SignaturePad from '../components/SignaturePad';
-import { 
+import {
   FileText, User, MapPin, Phone, Mail, Building2, Layers, Home, Bug,
   ChevronLeft, Calendar, Clock, Tag, IndianRupee,
   Plus, Trash2, Calculator, CheckSquare, XCircle, Eye, Edit2, Search,
@@ -20,16 +20,16 @@ const Label = ({ children, className = '', required }) => (
 );
 
 const Input = ({ className = '', ...props }) => (
-  <input 
-    {...props} 
-    className={`w-full bg-white border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 px-4 py-3 rounded-xl text-sm font-medium outline-none transition-all placeholder:text-slate-400 ${className}`} 
+  <input
+    {...props}
+    className={`w-full bg-white border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 px-4 py-3 rounded-xl text-sm font-medium outline-none placeholder:text-slate-400 ${className}`}
   />
 );
 
 const Select = ({ className = '', ...props }) => (
-  <select 
-    {...props} 
-    className={`w-full bg-white border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 px-4 py-3 rounded-xl text-sm font-medium outline-none transition-all cursor-pointer ${className}`} 
+  <select
+    {...props}
+    className={`w-full bg-white border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 px-4 py-3 rounded-xl text-sm font-medium outline-none cursor-pointer ${className}`}
   />
 );
 
@@ -70,7 +70,21 @@ const CreateForm = () => {
   const isEditing = !!editId;
 
   const [serviceType, setServiceType] = useState('AMC');
-  const [serviceRates, setServiceRates] = useState({});
+  const [attPrePost, setAttPrePost] = useState('PRE');
+  const [serviceRates, setServiceRates] = useState({
+    'Cockroaches': 12,
+    'Ants': 10,
+    'Spider': 10,
+    'Mosquito': 8,
+    'Flies': 8,
+    'Lizard': 10,
+    'Rodent': 15,
+    'Vector': 12,
+    'Bed Bugs': 18,
+    'Wood Borer': 20,
+    'Fumigation': 25,
+    'Others': 10
+  });
   const [formData, setFormData] = useState({
     branchId: '',
     customerId: '',
@@ -78,12 +92,12 @@ const CreateForm = () => {
     serviceCategory: 'Residential',
     reference: 'Walk-in',
     referenceBy: '',
-    attDetails: { 
-      treatmentTypes: [], 
-      chemicals: [], 
-      methods: ['Drill'], 
+    attDetails: {
+      prePost: 'PRE',
+      treatmentTypes: [],
+      chemicals: [],
+      methods: ['Drill'],
       baseSolutions: ['Water Based'],
-      constructionPhase: '',
       warranty: ''
     },
     amcServices: [],
@@ -101,18 +115,20 @@ const CreateForm = () => {
 
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
+  const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [rateLoadingForm, setIsRateLoadingForm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
   const [isLoadingForm, setIsLoadingForm] = useState(false);
   const sigPadRefEmp = useRef(null);
   const sigPadRefCust = useRef(null);
 
   useEffect(() => {
     if (user?.role !== 'super_admin' && user?.branchId) {
-      const bId = (typeof user.branchId === 'object' && user.branchId?._id) 
-          ? user.branchId._id 
-          : (typeof user.branchId === 'string' ? user.branchId : null);
+      const bId = (typeof user.branchId === 'object' && user.branchId?._id)
+        ? user.branchId._id
+        : (typeof user.branchId === 'string' ? user.branchId : null);
       if (bId) setFormData(prev => ({ ...prev, branchId: bId }));
     }
   }, [user]);
@@ -120,7 +136,9 @@ const CreateForm = () => {
   const { data: branches } = useQuery({
     queryKey: ['branches'],
     queryFn: async () => (await api.get('/branches')).data.data,
-    enabled: user?.role === 'super_admin' || user?.role === 'branch_admin'
+    enabled: user?.role === 'super_admin' || user?.role === 'branch_admin',
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 
   const { data: customersData } = useQuery({
@@ -140,18 +158,28 @@ const CreateForm = () => {
       params.append('category', formData.serviceCategory);
       if (formData.branchId) params.append('branchId', formData.branchId);
       const res = await api.get(`/service-rates?${params.toString()}`);
-      return res.data.data;
+      return res.data.data || [];
     },
-    enabled: !!formData.serviceCategory
+    enabled: !!formData.serviceCategory,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   useEffect(() => {
     if (rateData && rateData.length > 0) {
       const ratesMap = {};
       rateData.forEach(r => { ratesMap[r.serviceName] = r.price; });
-      setServiceRates(ratesMap);
+      setServiceRates(prev => ({ ...prev, ...ratesMap }));
     }
   }, [rateData]);
+
+  const { data: attDropdowns } = useQuery({
+    queryKey: ['attDropdowns'],
+    queryFn: async () => (await api.get('/settings/att-dropdowns')).data.data,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+  });
 
   // AMC Floor-wise calculation
   const getAMCFloorBreakdown = () => {
@@ -182,19 +210,44 @@ const CreateForm = () => {
   };
 
   const pestOptions = ['Cockroaches', 'Ants', 'Spider', 'Mosquito', 'Flies', 'Lizard', 'Rodent', 'Vector', 'Bed Bugs', 'Wood Borer', 'Fumigation', 'Others'];
+
+  const pestIcons = {
+    'Cockroaches': Bug,
+    'Ants': Bug,
+    'Spider': Bug,
+    'Mosquito': Bug,
+    'Flies': Bug,
+    'Lizard': Bug,
+    'Rodent': Bug,
+    'Vector': Bug,
+    'Bed Bugs': Bug,
+    'Wood Borer': Bug,
+    'Fumigation': Bug,
+    'Others': Bug
+  };
   const serviceOptions = ['Residential', 'Commercial', 'Industrial'];
   const referenceOptions = ['Company', 'Social Media', 'Website', 'Walk-in', 'Referral', 'Google', 'Facebook', 'Justdial', 'Other'];
   const paymentModes = ['Cash', 'Cheque', 'NEFT', 'Online', 'Wallet', 'Pending'];
   const premisesTypes = ['Bunglow', 'Flat', 'Building', 'Office', 'Factory', 'Warehouse', 'Hotel', 'Restaurant', 'Hospital', 'School', 'Other'];
   const warrantyOptions = ['No Warranty', '1 Year', '2 Years', '5 Years', 'Lifetime'];
-  const attConstructionPhases = ['Pre-Construction', 'Post-Construction'];
   const attWarrantyOptions = ['No Warranty', '1 Month', '3 Months', '6 Months', '1 Year', '2 Years', '3 Years', '5 Years', '7 Years', '10 Years'];
-  
-  // ATT Options - Multiple selection
-  const attTreatmentTypes = ['Side Treatment', 'Back Treatment', 'Plinth Treatment', 'Complete Treatment', 'RCC Treatment', 'Soil Treatment', 'Underground Treatment'];
-  const attChemicals = ['Repellent', 'Non-Repellent', 'Chlorpyrifos', 'Imidacloprid', 'Fipronil', 'Bifenthrin', 'Cypermethrin'];
-  const attMethods = ['Drill', 'Fill', 'Seal', 'Spray', 'Injection', 'Rodding'];
-  const attBaseSolutions = ['Water Based', 'Oil Based', 'Emulsion Based'];
+
+  // ATT Options - from dynamic settings or defaults
+  const currentTreatmentTypes = attPrePost === 'PRE'
+    ? (attDropdowns?.preTreatmentTypes?.length > 0 ? attDropdowns.preTreatmentTypes : ['Side Treatment', 'Back Treatment', 'Plinth Treatment', 'Complete Treatment', 'RCC Treatment', 'Soil Treatment', 'Underground Treatment'])
+    : (attDropdowns?.postTreatmentTypes?.length > 0 ? attDropdowns.postTreatmentTypes : ['Side Treatment', 'Back Treatment', 'Plinth Treatment', 'Complete Treatment', 'RCC Treatment', 'Soil Treatment', 'Underground Treatment']);
+
+  const currentChemicals = attPrePost === 'PRE'
+    ? (attDropdowns?.preChemicals?.length > 0 ? attDropdowns.preChemicals : ['Repellent', 'Non-Repellent', 'Chlorpyrifos', 'Imidacloprid', 'Fipronil', 'Bifenthrin', 'Cypermethrin'])
+    : (attDropdowns?.postChemicals?.length > 0 ? attDropdowns.postChemicals : ['Repellent', 'Non-Repellent', 'Chlorpyrifos', 'Imidacloprid', 'Fipronil', 'Bifenthrin', 'Cypermethrin']);
+
+  const currentMethods = attPrePost === 'PRE'
+    ? (attDropdowns?.preApplicationMethods?.length > 0 ? attDropdowns.preApplicationMethods : ['Drill', 'Fill', 'Seal', 'Spray', 'Injection', 'Rodding'])
+    : (attDropdowns?.postApplicationMethods?.length > 0 ? attDropdowns.postApplicationMethods : ['Drill', 'Fill', 'Seal', 'Spray', 'Injection', 'Rodding']);
+
+  const currentBaseSolutions = attPrePost === 'PRE'
+    ? (attDropdowns?.preBaseSolutions?.length > 0 ? attDropdowns.preBaseSolutions : ['Water Based', 'Oil Based', 'Emulsion Based'])
+    : (attDropdowns?.postBaseSolutions?.length > 0 ? attDropdowns.postBaseSolutions : ['Water Based', 'Oil Based', 'Emulsion Based']);
 
   const addFloor = () => {
     setFormData(prev => {
@@ -236,23 +289,21 @@ const CreateForm = () => {
       const noOfFloors = prev.premises.floors.length;
       const ratePerSqft = prev.ratePerSqft || 0;
       const perFloorExtra = prev.perFloorExtra || 0;
-      const serviceCount = prev.schedule.serviceCount || 1;
-      
+
       let amcAmount = 0;
       let attAmount = 0;
-      
-      // AMC: Rate per service × total services (multiplied by service count)
+
+      // AMC: Rate per service × area (without multiplying by service count)
       if ((serviceType === 'AMC' || serviceType === 'BOTH') && prev.amcServices.length > 0 && Object.keys(serviceRates).length > 0) {
-        const perServiceTotal = prev.premises.floors.reduce((total, floor) => {
+        amcAmount = prev.premises.floors.reduce((total, floor) => {
           const floorTotal = prev.amcServices.reduce((sum, service) => {
             const serviceRate = serviceRates[service] || 0;
             return sum + (floor.area * serviceRate);
           }, 0);
           return total + floorTotal;
         }, 0);
-        amcAmount = perServiceTotal * serviceCount;
       }
-      
+
       // GPC: Rate per service × area (without multiplying by service count)
       if (serviceType === 'GPC' && prev.amcServices.length > 0 && Object.keys(serviceRates).length > 0) {
         amcAmount = prev.premises.floors.reduce((total, floor) => {
@@ -263,19 +314,19 @@ const CreateForm = () => {
           return total + floorTotal;
         }, 0);
       }
-      
+
       // ATT Calculation (manual rate per sqft)
       if ((serviceType === 'ATT' || serviceType === 'BOTH') && ratePerSqft > 0) {
         const areaAmount = Math.ceil(totalArea * ratePerSqft);
         const floorExtraAmount = Math.ceil(noOfFloors * perFloorExtra);
         attAmount = areaAmount + floorExtraAmount;
       }
-      
+
       const baseAmount = amcAmount + attAmount;
       const gstAmount = Math.ceil(baseAmount * (prev.pricing.gstPercent || 18) / 100);
       const discountAmount = Math.ceil(baseAmount * (prev.pricing.discountPercent || 0) / 100);
       const finalAmount = baseAmount + gstAmount - discountAmount;
-      
+
       return {
         ...prev,
         pricing: { ...prev.pricing, baseAmount, gstAmount, discountAmount, finalAmount }
@@ -293,30 +344,30 @@ const CreateForm = () => {
   // Generate AMC Schedule based on service count and interval
   const generateAMCSchedule = (startDate) => {
     if (!startDate) return;
-    
+
     const { serviceCount, intervalDays } = formData.schedule;
-    
+
     const dates = [];
     const start = new Date(startDate);
-    
+
     for (let i = 0; i < serviceCount; i++) {
       const currentDate = new Date(start);
       currentDate.setDate(start.getDate() + (i * intervalDays));
-      
+
       const dayDiff = Math.floor((currentDate - start) / (1000 * 60 * 60 * 24)) + 1;
-      
+
       dates.push({
         date: currentDate.toISOString().split('T')[0],
-        formatted: currentDate.toLocaleDateString('en-IN', { 
-          weekday: 'short', 
-          day: '2-digit', 
-          month: 'short', 
-          year: 'numeric' 
+        formatted: currentDate.toLocaleDateString('en-IN', {
+          weekday: 'short',
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
         }),
         dayNumber: dayDiff
       });
     }
-    
+
     setFormData(prev => ({
       ...prev,
       schedule: { ...prev.schedule, scheduledDates: dates }
@@ -379,9 +430,9 @@ const CreateForm = () => {
   const handleServiceTypeChange = (type) => {
     setServiceType(type);
     if (type === 'AMC') {
-      setFormData(prev => ({ ...prev, attDetails: { treatmentTypes: [], chemicals: [], methods: ['Drill'], baseSolutions: ['Water Based'], warranty: '' } }));
+      setFormData(prev => ({ ...prev, attDetails: { prePost: 'PRE', treatmentTypes: [], chemicals: [], methods: ['Drill'], baseSolutions: ['Water Based'], warranty: '' } }));
     } else if (type === 'ATT') {
-      setFormData(prev => ({ ...prev, amcServices: [] }));
+      setFormData(prev => ({ ...prev, amcServices: [], attDetails: { ...prev.attDetails, prePost: 'PRE' } }));
     }
   };
 
@@ -398,9 +449,9 @@ const CreateForm = () => {
       const current = prev.attDetails[field] || [];
       const exists = current.includes(value);
       const updated = exists ? current.filter(v => v !== value) : [...current, value];
-      return { 
-        ...prev, 
-        attDetails: { ...prev.attDetails, [field]: updated } 
+      return {
+        ...prev,
+        attDetails: { ...prev.attDetails, [field]: updated }
       };
     });
   };
@@ -416,15 +467,49 @@ const CreateForm = () => {
     },
     onSuccess: (res) => {
       if (!isEditing && res.data.data?._id) {
-        api.post(`/forms/${res.data.data._id}/submit`)
+        const formId = res.data.data._id;
+        const orderNo = res.data.data.orderNo;
+        const advanceAmount = formData.billing?.advance || 0;
+
+        api.post(`/forms/${formId}/submit`)
           .then((submitRes) => {
             if (submitRes.data.autoAssigned) {
               toast.success('Form submitted! Task assigned to you. Check My Tasks.');
             } else {
               toast.success('Form submitted successfully!');
             }
+
+            if (submitRes.data.receiptCreated) {
+              toast.success(`Payment of ₹${advanceAmount.toLocaleString()} recorded in account!`);
+            }
+
+            // Invalidate ALL related queries so all pages update immediately
             queryClient.invalidateQueries(['forms']);
             queryClient.invalidateQueries(['my-tasks']);
+            queryClient.invalidateQueries(['dashboard']);
+            queryClient.invalidateQueries(['hqSummary']);
+            queryClient.invalidateQueries(['receipts']);
+            queryClient.invalidateQueries(['collections']);
+            queryClient.invalidateQueries(['collections-stats']);
+            queryClient.invalidateQueries(['enquiries']);
+            queryClient.invalidateQueries(['task-assignments']);
+
+            // Download PDF in background without blocking navigation
+            api.get(`/forms/${formId}/pdf`, { responseType: 'blob' })
+              .then((pdfRes) => {
+                const url = window.URL.createObjectURL(new Blob([pdfRes.data]));
+                const link = document.createElement('a');
+                link.href = url;
+                link.setAttribute('download', `JobCard_${orderNo || formId}.pdf`);
+                document.body.appendChild(link);
+                link.click();
+              })
+              .catch(() => {
+                console.warn('PDF generation failed');
+              });
+
+            // Navigate immediately
+            navigate('/forms');
           })
           .catch((err) => {
             console.warn('Submit error:', err);
@@ -441,6 +526,7 @@ const CreateForm = () => {
     onError: (err) => {
       toast.error(err.response?.data?.message || 'Error saving form');
       setIsLoading(false);
+      setIsSubmitted(false);
     }
   });
 
@@ -462,7 +548,7 @@ const CreateForm = () => {
           serviceCategory: form.serviceCategory || 'Residential',
           reference: form.reference || 'Walk-in',
           referenceBy: form.referenceBy || '',
-          attDetails: form.attDetails || { treatmentTypes: [], chemicals: [], methods: ['Drill'], baseSolutions: ['Water Based'], constructionPhase: '', warranty: '' },
+          attDetails: form.attDetails || { treatmentTypes: [], chemicals: [], methods: ['Drill'], baseSolutions: ['Water Based'], warranty: '' },
           amcServices: form.amcServices || [],
           premises: { ...premises, floors: floorsWithIds },
           ratePerSqft: form.ratePerSqft || 0,
@@ -493,18 +579,12 @@ const CreateForm = () => {
     e.preventDefault();
     if (!formData.branchId) { toast.error('Select branch'); return; }
     if (!formData.customer.name || !formData.customer.phone) { toast.error('Customer details required'); return; }
-    
+
     // AMC or BOTH service requires AMC services to be selected
-    if ((serviceType === 'AMC' || serviceType === 'GPC' || serviceType === 'BOTH') && formData.amcServices.length === 0) { 
-      toast.error('Select at least one AMC service'); return; 
+    if ((serviceType === 'AMC' || serviceType === 'GPC' || serviceType === 'BOTH') && formData.amcServices.length === 0) {
+      toast.error('Select at least one AMC service'); return;
     }
-    
-    // ATT or BOTH service requires ATT details (at least one treatment type or chemical)
-    if ((serviceType === 'ATT' || serviceType === 'BOTH') && 
-        (formData.attDetails.treatmentTypes?.length === 0 || formData.attDetails.chemicals?.length === 0)) { 
-      toast.error('Select at least one Treatment Type and Chemical for ATT'); return; 
-    }
-    
+
     if (formData.premises.totalArea <= 0) { toast.error('Add premises area'); return; }
     if (formData.ratePerSqft <= 0) { toast.error('Enter rate per sqft'); return; }
     setShowConfirmModal(true);
@@ -512,14 +592,16 @@ const CreateForm = () => {
 
   const confirmAndSubmit = async () => {
     setIsLoading(true);
+    setIsSubmitted(true);
     const empSig = sigPadRefEmp.current?.getTrimmedCanvas()?.toDataURL('image/png');
     const custSig = sigPadRefCust.current?.getTrimmedCanvas()?.toDataURL('image/png');
     if (!empSig || !custSig) {
       toast.error('Both signatures required');
       setIsLoading(false);
+      setIsSubmitted(false);
       return;
     }
-    
+
     // Clean up empty strings - convert to null for ObjectId fields
     const payload = {
       ...formData,
@@ -529,41 +611,13 @@ const CreateForm = () => {
       signatures: { employeeSignature: empSig, customerSignature: custSig },
       billing: { ...formData.billing, total: formData.pricing.finalAmount }
     };
-    
+
     mutation.mutate(payload);
-    
-    if ((serviceType === 'AMC' || serviceType === 'GPC' || serviceType === 'BOTH') && formData.amcServices.length > 0) {
-      const endDate = new Date();
-      const period = formData.contract.period || 12;
-      endDate.setMonth(endDate.getMonth() + parseInt(period));
-      
-      try {
-        await api.post('/amc', {
-          customerId: formData.customerId || null,
-          customerName: formData.customer.name,
-          customerPhone: formData.customer.phone,
-          customerAddress: formData.customer.address,
-          serviceType: formData.serviceCategory,
-          premisesType: formData.premises.type,
-          servicesIncluded: formData.amcServices,
-          startDate: formData.contract.startDate || new Date().toISOString().split('T')[0],
-          endDate: formData.contract.endDate || endDate.toISOString().split('T')[0],
-          period: period,
-          totalAmount: formData.pricing.finalAmount,
-          paidAmount: formData.billing.advance || 0,
-          branchId: formData.branchId,
-          formId: null
-        });
-        toast.success('AMC Contract also created!');
-      } catch (err) {
-        console.error('AMC creation failed:', err);
-      }
-    }
   };
 
   if (rateLoadingForm) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+      <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-4 border-brand-500 border-t-transparent mx-auto mb-4"></div>
           <p className="text-slate-600 font-medium">Loading form...</p>
@@ -573,18 +627,18 @@ const CreateForm = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50 pb-32">
+    <div className="min-h-screen bg-linear-to-br from-slate-50 via-slate-100 to-slate-50 pb-32 overflow-y-auto" style={{ scrollBehavior: 'smooth' }}>
       <div className="max-w-6xl mx-auto px-4 md:px-6 pt-6">
         <div className="flex items-center justify-between mb-6">
-          <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors group">
-            <div className="p-2 rounded-xl bg-white shadow-sm group-hover:bg-slate-100 transition-colors">
+          <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 group">
+            <div className="p-2 rounded-xl bg-white shadow-sm group-hover:bg-slate-100">
               <ChevronLeft size={20} />
             </div>
             <span className="text-sm font-semibold">{isEditing ? 'Back to Forms' : 'Back to Archive'}</span>
           </button>
           <div className="flex items-center gap-3">
             {isEditing && formData._id && (
-              <button type="button" onClick={() => window.open(`/api/forms/${formData._id}/pdf`, '_blank')} className="px-4 py-2 bg-white shadow-sm text-slate-700 rounded-xl text-sm font-semibold flex items-center gap-2 hover:bg-slate-50 transition-all border border-slate-200">
+              <button type="button" onClick={() => window.open(`/api/forms/${formData._id}/pdf`, '_blank')} className="px-4 py-2 bg-white shadow-sm text-slate-700 rounded-xl text-sm font-semibold flex items-center gap-2 border border-slate-200">
                 <Eye size={16} /> View PDF
               </button>
             )}
@@ -598,7 +652,7 @@ const CreateForm = () => {
           <SectionCard title="Branch Selection" icon={Building2} headerBg="bg-gradient-to-r from-amber-500 to-amber-600">
             <div className="bg-amber-50/50 rounded-xl p-4 border border-amber-100">
               <Label className="text-amber-700">Select Branch *</Label>
-              <Select value={formData.branchId} onChange={e => setFormData({...formData, branchId: e.target.value})} required className="bg-white">
+              <Select value={formData.branchId} onChange={e => setFormData({ ...formData, branchId: e.target.value })} required className="bg-white">
                 <option value="">-- Select Branch --</option>
                 {branches?.map(b => <option key={b._id} value={b._id}>{b.branchName} ({b.cityPrefix})</option>)}
               </Select>
@@ -615,24 +669,32 @@ const CreateForm = () => {
                 </div>
                 <h4 className="text-lg font-bold text-slate-800">Customer Details</h4>
               </div>
-              
+
               <div className="relative">
                 <div className="flex items-center gap-2 mb-2">
                   <Search size={14} className="text-slate-400" />
                   <Label className="mb-0 text-slate-500">Search Existing Customer</Label>
                 </div>
-                <Input 
+                <Input
                   value={customerSearch}
-                  onChange={(e) => { setCustomerSearch(e.target.value); setShowCustomerDropdown(true); if (!e.target.value) { setSelectedCustomerId(''); setFormData(prev => ({ ...prev, customerId: '' })); }}}
-                  onFocus={() => setShowCustomerDropdown(true)}
+                  onChange={(e) => {
+                    setCustomerSearch(e.target.value);
+                    setShowCustomerDropdown(true);
+                    if (!e.target.value) {
+                      setSelectedCustomerId('');
+                      setFormData(prev => ({ ...prev, customerId: '' }));
+                    }
+                  }}
+                  onFocus={() => { if (!selectedCustomerId) setShowCustomerDropdown(true); }}
+                  onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 150)}
                   placeholder="Search by name or phone..."
                   className="pl-11"
                 />
                 <Search size={16} className="absolute left-4 top-[42px] text-slate-400" />
                 {showCustomerDropdown && customersData?.length > 0 && (
-                  <div className="absolute z-20 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                  <div className="absolute z-20 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto" onMouseDown={(e) => e.preventDefault()}>
                     {customersData.map(cust => (
-                      <button key={cust._id} type="button" onClick={() => handleSelectCustomer(cust)} className="w-full text-left px-4 py-3 hover:bg-brand-50 border-b border-slate-100 last:border-0 transition-colors">
+                      <button key={cust._id} type="button" onMouseDown={() => handleSelectCustomer(cust)} className="w-full text-left px-4 py-3 bg-brand-50 border-b border-slate-100 last:border-0">
                         <span className="font-semibold text-slate-800 block">{cust.name}</span>
                         <span className="text-sm text-slate-500 mt-0.5 block">{cust.phone} • {cust.city}</span>
                       </button>
@@ -653,7 +715,7 @@ const CreateForm = () => {
                   <Input value={formData.customer.name} onChange={e => handleNestedChange('customer', 'name', e.target.value)} placeholder="Enter full name" />
                 </div>
               </div>
-              
+
               <div>
                 <div className="flex items-center gap-2 mb-1.5">
                   <MapPin size={14} className="text-slate-400" />
@@ -661,7 +723,7 @@ const CreateForm = () => {
                 </div>
                 <Input value={formData.customer.address} onChange={e => handleNestedChange('customer', 'address', e.target.value)} placeholder="House no, Street, Area" />
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>City</Label>
@@ -672,7 +734,7 @@ const CreateForm = () => {
                   <Input value={formData.customer.gstNo} onChange={e => handleNestedChange('customer', 'gstNo', e.target.value)} placeholder="Optional" />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <div className="flex items-center gap-2 mb-1.5">
@@ -686,7 +748,7 @@ const CreateForm = () => {
                   <Input value={formData.customer.whatsapp} onChange={e => handleNestedChange('customer', 'whatsapp', e.target.value)} placeholder="Optional" />
                 </div>
               </div>
-              
+
               <div>
                 <div className="flex items-center gap-2 mb-1.5">
                   <Mail size={14} className="text-slate-400" />
@@ -708,10 +770,9 @@ const CreateForm = () => {
                 <Label>Service Category</Label>
                 <div className="grid grid-cols-3 gap-3">
                   {serviceOptions.map(opt => (
-                    <button key={opt} type="button" onClick={() => setFormData({...formData, serviceCategory: opt})}
-                      className={`py-3 px-4 rounded-xl text-sm font-semibold transition-all border-2 ${
-                        formData.serviceCategory === opt ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400 hover:bg-slate-50'
-                      }`}>
+                    <button key={opt} type="button" onClick={() => setFormData({ ...formData, serviceCategory: opt })}
+                      className={`py-3 px-4 rounded-xl text-sm font-semibold border-2 ${formData.serviceCategory === opt ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-200 text-slate-600'
+                        }`}>
                       {opt}
                     </button>
                   ))}
@@ -721,13 +782,13 @@ const CreateForm = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Reference Source</Label>
-                  <Select value={formData.reference} onChange={e => setFormData({...formData, reference: e.target.value})}>
+                  <Select value={formData.reference} onChange={e => setFormData({ ...formData, reference: e.target.value })}>
                     {referenceOptions.map(ref => <option key={ref} value={ref}>{ref}</option>)}
                   </Select>
                 </div>
                 <div>
                   <Label>Reference By</Label>
-                  <Input value={formData.referenceBy} onChange={e => setFormData({...formData, referenceBy: e.target.value})} placeholder="Person name" />
+                  <Input value={formData.referenceBy} onChange={e => setFormData({ ...formData, referenceBy: e.target.value })} placeholder="Person name" />
                 </div>
               </div>
 
@@ -755,19 +816,18 @@ const CreateForm = () => {
 
         <SectionCard title="Service Type Selection" icon={Layers}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[{ key: 'AMC', label: 'AMC', subtitle: 'Annual Maintenance Contract', color: 'emerald', icon: CheckSquare }, 
-              { key: 'GPC', label: 'GPC', subtitle: 'General Pest Control', color: 'amber', icon: Bug },
-              { key: 'ATT', label: 'ATT', subtitle: 'Anti Termite Treatment', color: 'blue', icon: FileCheck }, 
-              { key: 'BOTH', label: 'AMC + ATT', subtitle: 'Both Services', color: 'purple', icon: FileText }].map(opt => (
+            {[{ key: 'AMC', label: 'AMC', subtitle: 'Annual Maintenance Contract', color: 'emerald', icon: CheckSquare },
+            { key: 'GPC', label: 'GPC', subtitle: 'General Pest Control', color: 'amber', icon: Bug },
+            { key: 'ATT', label: 'ATT', subtitle: 'Anti Termite Treatment', color: 'blue', icon: FileCheck },
+            { key: 'BOTH', label: 'AMC + ATT', subtitle: 'Both Services', color: 'purple', icon: FileText }].map(opt => (
               <button key={opt.key} type="button" onClick={() => handleServiceTypeChange(opt.key)}
-                className={`p-5 rounded-2xl border-2 transition-all relative overflow-hidden ${
-                  serviceType === opt.key 
-                    ? opt.color === 'emerald' ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg shadow-emerald-500/30' 
-                    : opt.color === 'amber' ? 'bg-amber-500 border-amber-500 text-white shadow-lg shadow-amber-500/30'
-                    : opt.color === 'blue' ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
-                    : 'bg-purple-600 border-purple-600 text-white shadow-lg shadow-purple-500/30'
-                    : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400 hover:shadow-md'
-                }`}>
+                className={`p-5 rounded-2xl border-2 relative overflow-hidden ${serviceType === opt.key
+                    ? opt.color === 'emerald' ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg shadow-emerald-500/30'
+                      : opt.color === 'amber' ? 'bg-amber-500 border-amber-500 text-white shadow-lg shadow-amber-500/30'
+                        : opt.color === 'blue' ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
+                          : 'bg-purple-600 border-purple-600 text-white shadow-lg shadow-purple-500/30'
+                    : 'bg-white border-slate-200 text-slate-600'
+                  }`}>
                 <div className="flex items-start gap-4">
                   <div className={`p-3 rounded-xl ${serviceType === opt.key ? 'bg-white/20' : 'bg-slate-100'}`}>
                     <opt.icon size={24} />
@@ -798,22 +858,24 @@ const CreateForm = () => {
               </div>
             )}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              {pestOptions.map(pest => (
-                <button key={pest} type="button" onClick={() => toggleAMCService(pest)}
-                  className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
-                    formData.amcServices.includes(pest) ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg' : 'bg-white border-slate-200 text-slate-600 hover:border-emerald-400 hover:bg-emerald-50'
-                  }`}>
-                  <div className="mb-2">
-                    {formData.amcServices.includes(pest) ? <CheckSquare size={24} /> : <XCircle size={24} />}
-                  </div>
-                  <span className="font-semibold text-sm text-center">{pest}</span>
-                  {serviceRates[pest] && (
-                    <span className={`text-xs mt-1 font-bold ${formData.amcServices.includes(pest) ? 'text-emerald-200' : 'text-emerald-600'}`}>
-                      ₹{serviceRates[pest]}/sqft
-                    </span>
-                  )}
-                </button>
-              ))}
+              {pestOptions.map(pest => {
+                const PestIcon = pestIcons[pest] || Bug;
+                return (
+                  <button key={pest} type="button" onClick={() => toggleAMCService(pest)}
+                    className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 ${formData.amcServices.includes(pest) ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg' : 'bg-white border-slate-200 text-slate-600'
+                      }`}>
+                    <div className="mb-2">
+                      {formData.amcServices.includes(pest) ? <CheckSquare size={24} /> : <PestIcon size={24} />}
+                    </div>
+                    <span className="font-semibold text-sm text-center">{pest}</span>
+                    {serviceRates[pest] && (
+                      <span className={`text-xs mt-1 font-bold ${formData.amcServices.includes(pest) ? 'text-emerald-200' : 'text-emerald-600'}`}>
+                        ₹{serviceRates[pest]}/sqft
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
             {formData.amcServices.length > 0 && (
               <div className="mt-5 p-4 bg-emerald-50 rounded-xl border border-emerald-100">
@@ -840,30 +902,41 @@ const CreateForm = () => {
 
         {(serviceType === 'ATT' || serviceType === 'BOTH') && (
           <SectionCard title="ATT Services - Anti Termite Treatment" icon={FileCheck} headerBg="bg-gradient-to-r from-blue-600 to-blue-500">
-            
-            {/* Construction Phase & Warranty Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-6">
-              <div>
-                <Label className="text-blue-700 mb-3 block">Construction Phase</Label>
-                <Select 
-                  value={formData.attDetails.constructionPhase} 
-                  onChange={e => setFormData(prev => ({ ...prev, attDetails: { ...prev.attDetails, constructionPhase: e.target.value } }))}
-                  className="w-full"
-                >
-                  <option value="">Select Phase</option>
-                  {attConstructionPhases.map(phase => (
-                    <option key={phase} value={phase}>{phase}</option>
-                  ))}
-                </Select>
+
+            {/* Pre/Post Toggle */}
+            <div className="mb-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
+              <div className="flex items-center justify-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => { setAttPrePost('PRE'); setFormData(prev => ({ ...prev, attDetails: { ...prev.attDetails, prePost: 'PRE' } })); }}
+                  className={`flex-1 py-3 px-6 rounded-xl font-bold text-sm ${attPrePost === 'PRE'
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-white text-slate-600 border-2 border-slate-200'
+                    }`}>
+                  PRE-TREATMENT
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAttPrePost('POST'); setFormData(prev => ({ ...prev, attDetails: { ...prev.attDetails, prePost: 'POST' } })); }}
+                  className={`flex-1 py-3 px-6 rounded-xl font-bold text-sm ${attPrePost === 'POST'
+                      ? 'bg-emerald-600 text-white shadow-lg'
+                      : 'bg-white text-slate-600 border-2 border-slate-200'
+                    }`}>
+                  POST-TREATMENT
+                </button>
               </div>
-              <div>
-                <Label className="text-blue-700 mb-3 block">Warranty Period</Label>
-                <Select 
-                  value={formData.attDetails.warranty} 
+            </div>
+
+            {/* Warranty Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-6">
+              <div className="sm:col-span-1">
+                <Label className="text-blue-700 mb-3 block">ATT Warranty Period</Label>
+                <Select
+                  value={formData.attDetails.warranty}
                   onChange={e => setFormData(prev => ({ ...prev, attDetails: { ...prev.attDetails, warranty: e.target.value } }))}
                   className="w-full"
                 >
-                  <option value="">Select Warranty</option>
+                  <option value="">Select ATT Warranty</option>
                   {attWarrantyOptions.map(w => (
                     <option key={w} value={w}>{w}</option>
                   ))}
@@ -878,13 +951,12 @@ const CreateForm = () => {
                 <Label className="mb-0 text-blue-700">Treatment Type (Select Multiple)</Label>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {attTreatmentTypes.map(type => (
+                {currentTreatmentTypes.map(type => (
                   <button key={type} type="button" onClick={() => toggleATTOption('treatmentTypes', type)}
-                    className={`flex items-center justify-center gap-2 p-3 rounded-xl border-2 transition-all ${
-                      isATTOptionSelected('treatmentTypes', type) 
-                        ? 'bg-blue-600 border-blue-600 text-white shadow-lg' 
-                        : 'bg-white border-slate-200 text-slate-600 hover:border-blue-400 hover:bg-blue-50'
-                    }`}>
+                    className={`flex items-center justify-center gap-2 p-3 rounded-xl border-2 ${isATTOptionSelected('treatmentTypes', type)
+                        ? 'bg-blue-600 border-blue-600 text-white shadow-lg'
+                        : 'bg-white border-slate-200 text-slate-600'
+                      }`}>
                     <div className="mb-1">
                       {isATTOptionSelected('treatmentTypes', type) ? <CheckSquare size={20} /> : <XCircle size={20} />}
                     </div>
@@ -901,13 +973,12 @@ const CreateForm = () => {
                 <Label className="mb-0 text-blue-700">Chemical Used (Select Multiple)</Label>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {attChemicals.map(chem => (
+                {currentChemicals.map(chem => (
                   <button key={chem} type="button" onClick={() => toggleATTOption('chemicals', chem)}
-                    className={`flex items-center justify-center gap-2 p-3 rounded-xl border-2 transition-all ${
-                      isATTOptionSelected('chemicals', chem) 
-                        ? 'bg-purple-600 border-purple-600 text-white shadow-lg' 
-                        : 'bg-white border-slate-200 text-slate-600 hover:border-purple-400 hover:bg-purple-50'
-                    }`}>
+                    className={`flex items-center justify-center gap-2 p-3 rounded-xl border-2 ${isATTOptionSelected('chemicals', chem)
+                        ? 'bg-purple-600 border-purple-600 text-white shadow-lg'
+                        : 'bg-white border-slate-200 text-slate-600'
+                      }`}>
                     <div className="mb-1">
                       {isATTOptionSelected('chemicals', chem) ? <CheckSquare size={20} /> : <XCircle size={20} />}
                     </div>
@@ -924,13 +995,12 @@ const CreateForm = () => {
                 <Label className="mb-0 text-blue-700">Application Method (Select Multiple)</Label>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-                {attMethods.map(method => (
+                {currentMethods.map(method => (
                   <button key={method} type="button" onClick={() => toggleATTOption('methods', method)}
-                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${
-                      isATTOptionSelected('methods', method) 
-                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg' 
-                        : 'bg-white border-slate-200 text-slate-600 hover:border-emerald-400 hover:bg-emerald-50'
-                    }`}>
+                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 ${isATTOptionSelected('methods', method)
+                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg'
+                        : 'bg-white border-slate-200 text-slate-600'
+                      }`}>
                     <div className="mb-1">
                       {isATTOptionSelected('methods', method) ? <CheckSquare size={20} /> : <XCircle size={20} />}
                     </div>
@@ -947,13 +1017,12 @@ const CreateForm = () => {
                 <Label className="mb-0 text-blue-700">Base Solution (Select Multiple)</Label>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {attBaseSolutions.map(base => (
+                {currentBaseSolutions.map(base => (
                   <button key={base} type="button" onClick={() => toggleATTOption('baseSolutions', base)}
-                    className={`flex items-center justify-center gap-2 p-3 rounded-xl border-2 transition-all ${
-                      isATTOptionSelected('baseSolutions', base) 
-                        ? 'bg-amber-600 border-amber-600 text-white shadow-lg' 
-                        : 'bg-white border-slate-200 text-slate-600 hover:border-amber-400 hover:bg-amber-50'
-                    }`}>
+                    className={`flex items-center justify-center gap-2 p-3 rounded-xl border-2 ${isATTOptionSelected('baseSolutions', base)
+                        ? 'bg-amber-600 border-amber-600 text-white shadow-lg'
+                        : 'bg-white border-slate-200 text-slate-600'
+                      }`}>
                     <div className="mb-1">
                       {isATTOptionSelected('baseSolutions', base) ? <CheckSquare size={20} /> : <XCircle size={20} />}
                     </div>
@@ -964,19 +1033,14 @@ const CreateForm = () => {
             </div>
 
             {/* Summary */}
-            {(formData.attDetails.treatmentTypes?.length > 0 || formData.attDetails.chemicals?.length > 0 || formData.attDetails.constructionPhase || formData.attDetails.warranty) && (
+            {(formData.attDetails.treatmentTypes?.length > 0 || formData.attDetails.chemicals?.length > 0 || formData.attDetails.warranty) && (
               <div className="mt-5 p-4 bg-blue-50 rounded-xl border border-blue-100">
                 <div className="flex items-center gap-2 mb-3">
                   <Check size={18} className="text-blue-600" />
                   <p className="font-bold text-blue-800">ATT Summary</p>
                 </div>
-                {(formData.attDetails.constructionPhase || formData.attDetails.warranty) && (
+                {formData.attDetails.warranty && (
                   <div className="flex flex-wrap gap-4 mb-3 pb-3 border-b border-blue-200">
-                    {formData.attDetails.constructionPhase && (
-                      <p className="text-sm text-blue-700">
-                        <span className="font-semibold">Phase:</span> {formData.attDetails.constructionPhase}
-                      </p>
-                    )}
                     {formData.attDetails.warranty && (
                       <p className="text-sm text-red-700 font-semibold">
                         <span className="font-semibold">Warranty:</span> {formData.attDetails.warranty}
@@ -1030,11 +1094,11 @@ const CreateForm = () => {
           <div className="border-t border-slate-100 pt-6">
             <div className="flex items-center justify-between mb-4">
               <h4 className="text-base font-bold text-slate-800">Floor Details</h4>
-              <button type="button" onClick={addFloor} className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-semibold hover:bg-brand-500 transition-all shadow-sm">
+              <button type="button" onClick={addFloor} className="flex items-center gap-2 px-4 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-semibold shadow-sm">
                 <Plus size={18} /> Add Floor
               </button>
             </div>
-            
+
             <div className="border border-slate-200 rounded-2xl overflow-hidden">
               <div className="bg-slate-50 px-5 py-3.5 grid grid-cols-12 gap-4 text-sm font-bold text-slate-600 uppercase tracking-wide">
                 <div className="col-span-4">Floor Label</div>
@@ -1044,15 +1108,15 @@ const CreateForm = () => {
                 <div className="col-span-2"></div>
               </div>
               {formData.premises.floors.map((floor, idx) => (
-                <div key={floor.id} className="px-5 py-3.5 grid grid-cols-12 gap-4 items-center border-t border-slate-100 bg-white hover:bg-slate-50/50 transition-colors">
+                <div key={floor.id} className="px-5 py-3.5 grid grid-cols-12 gap-4 items-center border-t border-slate-100 bg-white">
                   <div className="col-span-4">
                     <Input value={floor.label} onChange={e => updateFloor(floor.id, 'label', e.target.value)} placeholder={`Floor ${idx + 1}`} className="!py-2.5" />
                   </div>
                   <div className="col-span-2">
-                    <Input type="number" value={floor.length || ''} onChange={e => updateFloor(floor.id, 'length', e.target.value)} placeholder="0" className="!py-2.5" />
+                    <Input type="text" onChange={e => updateFloor(floor.id, 'length', e.target.value)} placeholder="0" className="!py-2.5" />
                   </div>
                   <div className="col-span-2">
-                    <Input type="number" value={floor.width || ''} onChange={e => updateFloor(floor.id, 'width', e.target.value)} placeholder="0" className="!py-2.5" />
+                    <Input type="text" onChange={e => updateFloor(floor.id, 'width', e.target.value)} placeholder="0" className="!py-2.5" />
                   </div>
                   <div className="col-span-2">
                     <div className="bg-emerald-100 text-emerald-700 px-4 py-2.5 rounded-xl text-center font-bold">
@@ -1061,7 +1125,7 @@ const CreateForm = () => {
                   </div>
                   <div className="col-span-2 flex justify-end">
                     {formData.premises.floors.length > 1 && (
-                      <button type="button" onClick={() => removeFloor(floor.id)} className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-colors">
+                      <button type="button" onClick={() => removeFloor(floor.id)} className="p-2.5 bg-red-50 text-red-500 rounded-xl">
                         <Trash2 size={18} />
                       </button>
                     )}
@@ -1126,39 +1190,38 @@ const CreateForm = () => {
               <div className="space-y-5">
                 <div>
                   <Label>Rate Per Square Feet (₹) - Manual Override</Label>
-                  <Input 
-                    type="number" 
-                    value={formData.ratePerSqft || ''} 
-                    onChange={e => setFormData(prev => ({ ...prev, ratePerSqft: parseFloat(e.target.value) || 0 }))} 
-                    placeholder="Enter rate per sqft" 
-                    className="text-lg font-bold !py-4 flex-1" 
+                  <Input
+                    type="text"
+                    onChange={e => setFormData(prev => ({ ...prev, ratePerSqft: parseFloat(e.target.value.replace(/[^0-9]/g, '')) || 0 }))}
+                    placeholder="Enter rate per sqft"
+                    className="text-lg font-bold !py-4 flex-1"
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <Label>Extra Per Floor (₹)</Label>
-                    <Input type="number" value={formData.perFloorExtra || ''} onChange={e => setFormData(prev => ({ ...prev, perFloorExtra: parseFloat(e.target.value) || 0 }))} placeholder="0" />
+                    <Input type="text" onChange={e => setFormData(prev => ({ ...prev, perFloorExtra: parseFloat(e.target.value.replace(/[^0-9]/g, '')) || 0 }))} placeholder="0" />
                   </div>
                   <div>
                     <Label>Discount (%)</Label>
-                    <Input type="number" value={formData.pricing.discountPercent || ''} onChange={e => handleNestedChange('pricing', 'discountPercent', e.target.value)} placeholder="0" />
+                    <Input type="text" onChange={e => handleNestedChange('pricing', 'discountPercent', e.target.value)} placeholder="0" />
                   </div>
                   <div>
                     <Label>GST (%)</Label>
-                    <Input type="number" value={formData.pricing.gstPercent || 18} onChange={e => handleNestedChange('pricing', 'gstPercent', e.target.value)} />
+                    <Input type="text" onChange={e => handleNestedChange('pricing', 'gstPercent', e.target.value)} placeholder="18" />
                   </div>
                 </div>
               </div>
-              
-              <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-xl">
+
+              <div className="bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-xl">
                 <div className="flex items-center gap-3 mb-5">
                   <Calculator size={20} className="text-brand-400" />
                   <h4 className="font-bold uppercase tracking-wide text-sm">Final Price Breakdown</h4>
                 </div>
                 <div className="space-y-3.5 text-sm">
                   <div className="flex justify-between"><span className="text-slate-400">Total Area</span><span className="font-bold">{formData.premises.totalArea.toLocaleString('en-IN')} sqft</span></div>
-                  
+
                   {/* AMC Section */}
                   {(serviceType === 'AMC' || serviceType === 'GPC' || serviceType === 'BOTH') && formData.amcServices.length > 0 && Object.keys(serviceRates).length > 0 && (
                     <div className="flex justify-between border-t border-slate-700 pt-3">
@@ -1166,7 +1229,7 @@ const CreateForm = () => {
                       <span className="font-bold text-emerald-400">₹{getAMCTotal().toLocaleString('en-IN')}</span>
                     </div>
                   )}
-                  
+
                   {/* ATT Section - Manual Rate */}
                   {(serviceType === 'ATT' || serviceType === 'BOTH') && formData.ratePerSqft > 0 && (
                     <>
@@ -1174,11 +1237,11 @@ const CreateForm = () => {
                       <div className="flex justify-between"><span className="text-blue-400">ATT Amount</span><span className="font-bold text-blue-400">₹{(formData.premises.totalArea * formData.ratePerSqft).toLocaleString('en-IN')}</span></div>
                     </>
                   )}
-                  
+
                   {formData.perFloorExtra > 0 && (
                     <div className="flex justify-between"><span className="text-slate-400">Floor Extra ({formData.premises.floors.length} × ₹{formData.perFloorExtra})</span><span className="font-bold">₹{(formData.premises.floors.length * formData.perFloorExtra).toLocaleString('en-IN')}</span></div>
                   )}
-                  
+
                   <div className="flex justify-between border-t border-slate-700 pt-3">
                     <span className="font-semibold">Base Amount</span>
                     <span className="font-bold">₹{formData.pricing.baseAmount.toLocaleString('en-IN')}</span>
@@ -1212,45 +1275,39 @@ const CreateForm = () => {
             </div>
           )}
 
-          {/* AMC - Custom Schedule */}
-          {serviceType === 'AMC' && (
+          {/* AMC & BOTH - Custom Schedule */}
+          {(serviceType === 'AMC' || serviceType === 'BOTH') && (
             <div className="space-y-5">
               <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200">
                 <p className="text-sm font-semibold text-emerald-800 mb-3">AMC Service Schedule Configuration</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   <div>
                     <Label>First Service Date</Label>
-                    <Input 
-                      type="date" 
-                      value={formData.schedule.date} 
+                    <Input
+                      type="date"
+                      value={formData.schedule.date}
                       onChange={e => {
                         handleNestedChange('schedule', 'date', e.target.value);
                         generateAMCSchedule(e.target.value);
-                      }} 
+                      }}
                     />
                   </div>
                   <div>
                     <Label>Total Months</Label>
-                    <Input 
-                      type="number" 
-                      min="1" 
-                      max="60" 
-                      value={formData.schedule.period} 
+                    <Input
+                      type="text"
                       onChange={e => {
-                        handleNestedChange('schedule', 'period', parseInt(e.target.value) || 12);
+                        handleNestedChange('schedule', 'period', parseInt(e.target.value.replace(/[^0-9]/g, '')) || 12);
                       }}
                       placeholder="e.g., 12"
                     />
                   </div>
                   <div>
                     <Label>Total Services</Label>
-                    <Input 
-                      type="number" 
-                      min="1" 
-                      max="365" 
-                      value={formData.schedule.serviceCount} 
+                    <Input
+                      type="text"
                       onChange={e => {
-                        const count = parseInt(e.target.value) || 1;
+                        const count = parseInt(e.target.value.replace(/[^0-9]/g, '')) || 1;
                         handleNestedChange('schedule', 'serviceCount', count);
                         if (formData.schedule.date) {
                           generateAMCSchedule(formData.schedule.date);
@@ -1261,37 +1318,16 @@ const CreateForm = () => {
                   </div>
                   <div>
                     <Label>Interval (Days)</Label>
-                    <Input 
-                      type="number" 
-                      min="1" 
-                      max="365"
-                      value={formData.schedule.intervalDays} 
+                    <Input
+                      type="text"
                       onChange={e => {
-                        const interval = parseInt(e.target.value) || 30;
+                        const interval = parseInt(e.target.value.replace(/[^0-9]/g, '')) || 30;
                         handleNestedChange('schedule', 'intervalDays', interval);
                         if (formData.schedule.date) {
                           generateAMCSchedule(formData.schedule.date);
                         }
                       }}
                       placeholder="e.g., 30"
-                    />
-                  </div>
-                  <div>
-                    <Label>Services Per Month</Label>
-                    <Input 
-                      type="number" 
-                      min="1" 
-                      max="30" 
-                      value={formData.schedule.servicesPerMonth} 
-                      onChange={e => {
-                        const count = parseInt(e.target.value) || 1;
-                        handleNestedChange('schedule', 'servicesPerMonth', count);
-                        handleNestedChange('schedule', 'serviceCount', count);
-                        if (formData.schedule.date) {
-                          generateAMCSchedule(formData.schedule.date);
-                        }
-                      }}
-                      placeholder="e.g., 4"
                     />
                   </div>
                 </div>
@@ -1344,11 +1380,11 @@ const CreateForm = () => {
             </div>
             <div>
               <Label>Advance Amount (₹)</Label>
-              <Input type="number" value={formData.billing.advance || ''} onChange={e => handleNestedChange('billing', 'advance', e.target.value)} placeholder="0" className="!bg-emerald-50 !border-emerald-200 !text-emerald-700 !font-bold" />
+              <Input type="text" onChange={e => handleNestedChange('billing', 'advance', e.target.value)} placeholder="0" className="!bg-emerald-50 !border-emerald-200 !text-emerald-700 !font-bold" />
             </div>
             <div>
               <Label>Balance Due (₹)</Label>
-              <Input type="number" value={formData.billing.due || ''} readOnly className="!bg-red-50 !border-red-200 !text-red-700 !font-bold !cursor-not-allowed" />
+              <Input type="text" readOnly placeholder="Auto-calculated" className="!bg-red-50 !border-red-200 !text-red-700 !font-bold !cursor-not-allowed" />
             </div>
             <div>
               <Label>Payment Details</Label>
@@ -1377,20 +1413,20 @@ const CreateForm = () => {
               <div className="flex items-center justify-between">
                 <Label>Agreement Area</Label>
                 {formData.contract.agreementArea !== formData.premises.totalArea && formData.premises.totalArea > 0 && (
-                  <button type="button" onClick={() => handleNestedChange('contract', 'agreementArea', formData.premises.totalArea)} 
-                    className="text-[10px] text-brand-600 hover:text-brand-800 font-medium">
+                  <button type="button" onClick={() => handleNestedChange('contract', 'agreementArea', formData.premises.totalArea)}
+                    className="text-[10px] text-brand-600 font-medium">
                     Reset to {formData.premises.totalArea}
                   </button>
                 )}
               </div>
-              <Input type="number" value={formData.contract.agreementArea} onChange={e => handleNestedChange('contract', 'agreementArea', e.target.value)} placeholder="Sq.Ft." />
+              <Input type="text" onChange={e => handleNestedChange('contract', 'agreementArea', e.target.value)} placeholder="Sq.Ft." />
               {formData.contract.agreementArea > 0 && (
                 <p className="text-[10px] text-slate-500 mt-1">Total Area: {formData.premises.totalArea} sq.ft.</p>
               )}
             </div>
             <div>
               <Label>Rate/Sq.Ft.</Label>
-              <Input type="number" value={formData.contract.ratePerSqft} onChange={e => handleNestedChange('contract', 'ratePerSqft', e.target.value)} placeholder="₹" />
+              <Input type="text" onChange={e => handleNestedChange('contract', 'ratePerSqft', e.target.value)} placeholder="₹" />
             </div>
             <div>
               <Label>Start Date</Label>
@@ -1423,7 +1459,7 @@ const CreateForm = () => {
               <div className="border-2 border-slate-200 rounded-2xl bg-slate-50 h-36 overflow-hidden">
                 <SignaturePad ref={sigPadRefEmp} penColor="#0f172a" />
               </div>
-              <button type="button" onClick={() => sigPadRefEmp.current?.clear()} className="mt-2 text-sm font-medium text-red-500 hover:text-red-700 flex items-center gap-1">
+              <button type="button" onClick={() => sigPadRefEmp.current?.clear()} className="mt-2 text-sm font-medium text-red-500 flex items-center gap-1">
                 <Trash2 size={14} /> Clear Signature
               </button>
             </div>
@@ -1432,7 +1468,7 @@ const CreateForm = () => {
               <div className="border-2 border-slate-200 rounded-2xl bg-slate-50 h-36 overflow-hidden">
                 <SignaturePad ref={sigPadRefCust} penColor="#0f172a" />
               </div>
-              <button type="button" onClick={() => sigPadRefCust.current?.clear()} className="mt-2 text-sm font-medium text-red-500 hover:text-red-700 flex items-center gap-1">
+              <button type="button" onClick={() => sigPadRefCust.current?.clear()} className="mt-2 text-sm font-medium text-red-500 flex items-center gap-1">
                 <Trash2 size={14} /> Clear Signature
               </button>
             </div>
@@ -1440,8 +1476,16 @@ const CreateForm = () => {
         </SectionCard>
 
         <div className="sticky bottom-6 z-10">
-          <button disabled={rateLoading} type="submit" className="w-full py-5 bg-gradient-to-r from-brand-600 to-brand-500 text-white rounded-2xl font-bold text-base uppercase tracking-wider hover:from-brand-500 hover:to-brand-400 disabled:opacity-60 flex items-center justify-center gap-3 shadow-xl shadow-brand-500/30 transition-all">
-            {rateLoading ? (
+          <button
+            disabled={rateLoading || isSubmitted || mutation.isPending}
+            type="submit"
+            className="w-full py-5 bg-gradient-to-r from-brand-600 to-brand-500 text-white rounded-2xl font-bold text-base uppercase tracking-wider disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-xl shadow-brand-500/30">
+            {(isSubmitted || mutation.isPending) ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                Processing...
+              </>
+            ) : rateLoading ? (
               <>
                 <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
                 Processing...
@@ -1469,7 +1513,7 @@ const CreateForm = () => {
                   <p className="text-slate-400 text-sm">Please review details before submitting</p>
                 </div>
               </div>
-              <button onClick={() => setShowConfirmModal(false)} className="p-2 rounded-xl hover:bg-white/10 text-white/60 hover:text-white transition-colors">
+              <button onClick={() => setShowConfirmModal(false)} className="p-2 rounded-xl bg-white/10 text-white/60">
                 <XCircle size={22} />
               </button>
             </div>
@@ -1492,7 +1536,7 @@ const CreateForm = () => {
                   <p className="font-bold text-slate-800 mt-1">{serviceType}</p>
                 </div>
               </div>
-              
+
               {formData.amcServices.length > 0 && (
                 <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
                   <p className="text-emerald-600 text-xs font-medium uppercase tracking-wide">AMC Services</p>
@@ -1507,13 +1551,13 @@ const CreateForm = () => {
                   </p>
                 </div>
               )}
-              
+
               <div className="bg-slate-50 p-4 rounded-xl">
                 <p className="text-slate-500 text-xs font-medium uppercase tracking-wide">Total Area</p>
                 <p className="font-bold text-slate-800 text-lg mt-1">{formData.premises.totalArea.toLocaleString('en-IN')} Sq.Ft.</p>
               </div>
-              
-              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-2xl p-5 space-y-3">
+
+              <div className="bg-linear-to-br from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-2xl p-5 space-y-3">
                 <div className="flex justify-between text-sm"><span className="text-slate-600">Base Amount</span><span className="font-bold">₹{formData.pricing.baseAmount.toLocaleString('en-IN')}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-slate-600">GST ({formData.pricing.gstPercent}%)</span><span className="font-bold">₹{formData.pricing.gstAmount.toLocaleString('en-IN')}</span></div>
                 {formData.pricing.discountPercent > 0 && (
@@ -1531,11 +1575,11 @@ const CreateForm = () => {
               </div>
 
               <div className="flex gap-3 pt-2">
-                <button onClick={() => setShowConfirmModal(false)} className="flex-1 py-4 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-all flex items-center justify-center gap-2">
+                <button onClick={() => setShowConfirmModal(false)} className="flex-1 py-4 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm flex items-center justify-center gap-2">
                   <Edit2 size={16} /> Edit Details
                 </button>
-                <button onClick={confirmAndSubmit} disabled={mutation.isPending} className="flex-1 py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl font-bold text-sm hover:from-emerald-500 hover:to-emerald-400 disabled:opacity-60 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30">
-                  {mutation.isPending ? (
+                <button onClick={confirmAndSubmit} disabled={mutation.isPending || isSubmitted} className="flex-1 py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl font-bold text-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30">
+                  {(mutation.isPending || isSubmitted) ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
                       Submitting...
