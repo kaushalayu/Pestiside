@@ -594,14 +594,14 @@ const Leads = () => {
       return (await api.get(`/leads?${p}`)).data;
     },
     staleTime: 0,
-    refetchInterval: 5000,
+    refetchInterval: 3000,
   });
 
   const { data: statsRes } = useQuery({
     queryKey: ['leadStats'],
     queryFn: async () => (await api.get('/leads/stats')).data?.data || {},
     staleTime: 0,
-    refetchInterval: 5000,
+    refetchInterval: 3000,
   });
 
   const { data: branches } = useQuery({
@@ -661,9 +661,10 @@ const Leads = () => {
   });
 
   const leads = leadsRes?.data || [];
+  const pagination = leadsRes?.pagination || {};
+  const totalLeads = pagination.total || statsRes?.totalLeads || leads.length;
   const stats = statsRes?.statusStats || [];
   const getCount = (s) => stats.find(x => x._id === s)?.count || 0;
-  const totalLeads = statsRes?.totalLeads || 0;
 
   const STAT_TABS = [
     { key: 'ALL', label: 'All', count: totalLeads, color: 'text-slate-900' },
@@ -823,12 +824,17 @@ const Leads = () => {
 
           {/* Pagination */}
           <div className="flex items-center justify-between bg-gradient-to-r from-white to-slate-50 px-4 sm:px-5 py-3 sm:py-4 rounded-xl border border-slate-200 shadow-sm">
-            <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Page {page} · {leads.length} leads shown</p>
+            <p className="text-[10px] sm:text-xs text-slate-500 font-medium">
+              Showing {((page - 1) * 12) + 1}-{Math.min(page * 12, totalLeads)} of {totalLeads} leads
+            </p>
             <div className="flex gap-2">
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
                 className="p-2 bg-white rounded-xl disabled:opacity-40 text-slate-600 border border-slate-200 shadow-sm">
                 <ChevronLeft size={16} />
               </button>
+              <span className="px-3 py-2 bg-white rounded-xl border border-slate-200 shadow-sm text-xs font-medium text-slate-600">
+                {page}
+              </span>
               <button onClick={() => setPage(p => p + 1)} disabled={leads.length < 12}
                 className="p-2 bg-white rounded-xl disabled:opacity-40 text-slate-600 border border-slate-200 shadow-sm">
                 <ChevronRight size={16} />

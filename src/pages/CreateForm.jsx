@@ -104,8 +104,23 @@ const CreateForm = () => {
     premises: { type: '', floors: [{ id: 1, label: 'Floor 1', length: 0, width: 0, area: 0 }], totalArea: 0 },
     ratePerSqft: 0,
     perFloorExtra: 0,
-    pricing: { baseAmount: 0, gstPercent: 18, gstAmount: 0, discountPercent: 0, discountAmount: 0, finalAmount: 0 },
-    schedule: { type: 'One Time', date: '', time: '', period: 12, servicesPerMonth: 1, serviceCount: 1, intervalDays: 30, scheduledDates: [] },
+    pricing: { 
+      baseAmount: 0, 
+      gstPercent: 18, 
+      gstAmount: 0, 
+      discountPercent: 0, 
+      discountAmount: 0, 
+      finalAmount: 0,
+      gpcAmount: 0,
+      gpcDiscountPercent: 0,
+      gpcDiscountAmount: 0,
+      gpcSubtotal: 0,
+      attAmount: 0,
+      attDiscountPercent: 0,
+      attDiscountAmount: 0,
+      attSubtotal: 0
+    },
+    schedule: { type: 'One Time', date: '', time: '', period: 12, servicesPerMonth: 1, serviceCount: 1, intervalDays: 30, scheduledDates: [], autoCalculateInterval: true },
     billing: { paymentMode: 'Cash', advance: '', due: '', paymentDetail: '', transactionNo: '', paymentImage: '' },
     contract: { agreementArea: '', ratePerSqft: '', period: '', warranty: '', startDate: '', endDate: '' },
     executive: { name: '', phone: '' },
@@ -123,6 +138,7 @@ const CreateForm = () => {
   const [isLoadingForm, setIsLoadingForm] = useState(false);
   const sigPadRefEmp = useRef(null);
   const sigPadRefCust = useRef(null);
+  const calculatingPricingRef = useRef(false);
 
   useEffect(() => {
     if (user?.role !== 'super_admin' && user?.branchId) {
@@ -161,24 +177,25 @@ const CreateForm = () => {
       return res.data.data || [];
     },
     enabled: !!formData.serviceCategory,
-    staleTime: 10 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    staleTime: 0,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   useEffect(() => {
-    if (rateData && rateData.length > 0) {
+    if (rateData) {
       const ratesMap = {};
       rateData.forEach(r => { ratesMap[r.serviceName] = r.price; });
-      setServiceRates(prev => ({ ...prev, ...ratesMap }));
+      setServiceRates(ratesMap);
     }
   }, [rateData]);
 
   const { data: attDropdowns } = useQuery({
     queryKey: ['attDropdowns'],
     queryFn: async () => (await api.get('/settings/att-dropdowns')).data.data,
-    staleTime: 10 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
+    staleTime: 0,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   // AMC Floor-wise calculation
@@ -292,8 +309,13 @@ const CreateForm = () => {
 
       let amcAmount = 0;
       let attAmount = 0;
+      let gpcAmount = 0;
+      let gpcSubtotal = 0;
+      let gpcDiscountAmount = 0;
+      let attSubtotal = 0;
+      let attDiscountAmount = 0;
 
-      // AMC: Rate per service × area (without multiplying by service count)
+      // AMC: Rate per service × area
       if ((serviceType === 'AMC' || serviceType === 'BOTH') && prev.amcServices.length > 0 && Object.keys(serviceRates).length > 0) {
         amcAmount = prev.premises.floors.reduce((total, floor) => {
           const floorTotal = prev.amcServices.reduce((sum, service) => {
@@ -304,32 +326,58 @@ const CreateForm = () => {
         }, 0);
       }
 
-      // GPC: Rate per service × area (without multiplying by service count)
-      if (serviceType === 'GPC' && prev.amcServices.length > 0 && Object.keys(serviceRates).length > 0) {
-        amcAmount = prev.premises.floors.reduce((total, floor) => {
+      // GPC: Rate per service × area
+      if ((serviceType === 'GPC' || serviceType === 'GPC_ATT') && prev.amcServices.length > 0 && Object.keys(serviceRates).length > 0) {
+        gpcAmount = prev.premises.floors.reduce((total, floor) => {
           const floorTotal = prev.amcServices.reduce((sum, service) => {
             const serviceRate = serviceRates[service] || 0;
             return sum + (floor.area * serviceRate);
           }, 0);
           return total + floorTotal;
         }, 0);
+        const gpcDiscountPct = prev.pricing.gpcDiscountPercent || 0;
+        gpcDiscountAmount = Math.ceil(gpcAmount * gpcDiscountPct / 100);
+        gpcSubtotal = gpcAmount - gpcDiscountAmount;
       }
 
       // ATT Calculation (manual rate per sqft)
-      if ((serviceType === 'ATT' || serviceType === 'BOTH') && ratePerSqft > 0) {
+      if ((serviceType === 'ATT' || serviceType === 'BOTH' || serviceType === 'GPC_ATT') && ratePerSqft > 0) {
         const areaAmount = Math.ceil(totalArea * ratePerSqft);
         const floorExtraAmount = Math.ceil(noOfFloors * perFloorExtra);
         attAmount = areaAmount + floorExtraAmount;
+        const attDiscountPct = prev.pricing.attDiscountPercent || 0;
+        attDiscountAmount = Math.ceil(attAmount * attDiscountPct / 100);
+        attSubtotal = attAmount - attDiscountAmount;
       }
 
-      const baseAmount = amcAmount + attAmount;
+      // For AMC and GPC (standalone), use amcAmount as base
+      // For GPC_ATT, combine gpcSubtotal + attSubtotal
+      let baseAmount;
+      if (serviceType === 'GPC_ATT') {
+        baseAmount = gpcSubtotal + attSubtotal;
+      } else {
+        baseAmount = amcAmount + attAmount;
+      }
+      
       const gstAmount = Math.ceil(baseAmount * (prev.pricing.gstPercent || 18) / 100);
       const discountAmount = Math.ceil(baseAmount * (prev.pricing.discountPercent || 0) / 100);
       const finalAmount = baseAmount + gstAmount - discountAmount;
 
       return {
         ...prev,
-        pricing: { ...prev.pricing, baseAmount, gstAmount, discountAmount, finalAmount }
+        pricing: { 
+          ...prev.pricing, 
+          baseAmount, 
+          gstAmount, 
+          discountAmount, 
+          finalAmount,
+          gpcAmount,
+          gpcDiscountAmount,
+          gpcSubtotal,
+          attAmount,
+          attDiscountAmount,
+          attSubtotal
+        }
       };
     });
   };
@@ -375,8 +423,11 @@ const CreateForm = () => {
   };
 
   useEffect(() => {
+    if (calculatingPricingRef.current) return;
+    calculatingPricingRef.current = true;
     calculatePricing();
-  }, [formData.premises.totalArea, formData.ratePerSqft, formData.perFloorExtra, formData.pricing.gstPercent, formData.pricing.discountPercent, formData.amcServices, formData.schedule.serviceCount, serviceType, serviceRates]);
+    setTimeout(() => { calculatingPricingRef.current = false; }, 100);
+  }, [formData.premises.totalArea, formData.ratePerSqft, formData.perFloorExtra, formData.pricing.gstPercent, formData.pricing.discountPercent, formData.pricing.gpcDiscountPercent, formData.pricing.attDiscountPercent, formData.amcServices, formData.schedule.serviceCount, serviceType, serviceRates]);
 
   useEffect(() => {
     setFormData(prev => {
@@ -433,14 +484,65 @@ const CreateForm = () => {
       setFormData(prev => ({ ...prev, attDetails: { prePost: 'PRE', treatmentTypes: [], chemicals: [], methods: ['Drill'], baseSolutions: ['Water Based'], warranty: '' } }));
     } else if (type === 'ATT') {
       setFormData(prev => ({ ...prev, amcServices: [], attDetails: { ...prev.attDetails, prePost: 'PRE' } }));
+    } else if (type === 'GPC_ATT') {
+      setFormData(prev => ({ ...prev, attDetails: { ...prev.attDetails, prePost: 'PRE' } }));
     }
   };
 
   const toggleAMCService = (service) => {
     setFormData(prev => {
       const exists = prev.amcServices.includes(service);
-      const amcServices = exists ? prev.amcServices.filter(s => s !== service) : [...prev.amcServices, service];
-      return { ...prev, amcServices };
+      const newAmcServices = exists ? prev.amcServices.filter(s => s !== service) : [...prev.amcServices, service];
+      
+      // Calculate pricing immediately
+      const totalArea = prev.premises.totalArea;
+      const ratePerSqft = prev.ratePerSqft || 0;
+      
+      let gpcAmount = 0;
+      let gpcSubtotal = 0;
+      let gpcDiscountAmount = 0;
+      
+      if ((serviceType === 'GPC' || serviceType === 'GPC_ATT') && newAmcServices.length > 0 && Object.keys(serviceRates).length > 0) {
+        gpcAmount = prev.premises.floors.reduce((total, floor) => {
+          const floorTotal = newAmcServices.reduce((sum, svc) => {
+            const svcRate = serviceRates[svc] || 0;
+            return sum + (floor.area * svcRate);
+          }, 0);
+          return total + floorTotal;
+        }, 0);
+        const gpcDiscountPct = prev.pricing.gpcDiscountPercent || 0;
+        gpcDiscountAmount = Math.ceil(gpcAmount * gpcDiscountPct / 100);
+        gpcSubtotal = gpcAmount - gpcDiscountAmount;
+      }
+      
+      const attAmount = prev.pricing.attAmount || 0;
+      const attSubtotal = prev.pricing.attSubtotal || 0;
+      
+      let baseAmount;
+      if (serviceType === 'GPC_ATT') {
+        baseAmount = gpcSubtotal + attSubtotal;
+      } else {
+        baseAmount = gpcAmount + attAmount;
+      }
+      
+      const gstAmount = Math.ceil(baseAmount * (prev.pricing.gstPercent || 18) / 100);
+      const discountAmount = Math.ceil(baseAmount * (prev.pricing.discountPercent || 0) / 100);
+      const finalAmount = baseAmount + gstAmount - discountAmount;
+      
+      return {
+        ...prev,
+        amcServices: newAmcServices,
+        pricing: {
+          ...prev.pricing,
+          baseAmount,
+          gstAmount,
+          discountAmount,
+          finalAmount,
+          gpcAmount,
+          gpcDiscountAmount,
+          gpcSubtotal
+        }
+      };
     });
   };
 
@@ -554,7 +656,14 @@ const CreateForm = () => {
           ratePerSqft: form.ratePerSqft || 0,
           perFloorExtra: form.perFloorExtra || 0,
           pricing: form.pricing || { baseAmount: 0, gstPercent: 18, gstAmount: 0, discountPercent: 0, discountAmount: 0, finalAmount: 0 },
-          schedule: form.schedule || { type: 'One Time', date: '', time: '' },
+          schedule: {
+            ...form.schedule,
+            period: form.schedule?.period || 12,
+            servicesPerMonth: form.schedule?.servicesPerMonth || 1,
+            serviceCount: form.schedule?.serviceCount || 1,
+            intervalDays: form.schedule?.intervalDays || 30,
+            scheduledDates: form.schedule?.scheduledDates || []
+          },
           billing: form.billing || { paymentMode: 'Cash', advance: '', due: '', paymentDetail: '', transactionNo: '', paymentImage: '' },
           contract: form.contract || { agreementArea: '', ratePerSqft: '', period: '', warranty: '', startDate: '', endDate: '' },
           executive: form.executive || { name: '', phone: '' },
@@ -580,9 +689,14 @@ const CreateForm = () => {
     if (!formData.branchId) { toast.error('Select branch'); return; }
     if (!formData.customer.name || !formData.customer.phone) { toast.error('Customer details required'); return; }
 
-    // AMC or BOTH service requires AMC services to be selected
-    if ((serviceType === 'AMC' || serviceType === 'GPC' || serviceType === 'BOTH') && formData.amcServices.length === 0) {
-      toast.error('Select at least one AMC service'); return;
+    // AMC, GPC, BOTH, or GPC_ATT service requires services to be selected
+    if ((serviceType === 'AMC' || serviceType === 'GPC' || serviceType === 'BOTH' || serviceType === 'GPC_ATT') && formData.amcServices.length === 0) {
+      toast.error('Select at least one GPC service'); return;
+    }
+
+    // GPC_ATT also requires ATT rate
+    if (serviceType === 'GPC_ATT' && formData.ratePerSqft <= 0) {
+      toast.error('Enter ATT rate per sqft'); return;
     }
 
     if (formData.premises.totalArea <= 0) { toast.error('Add premises area'); return; }
@@ -638,7 +752,24 @@ const CreateForm = () => {
           </button>
           <div className="flex items-center gap-3">
             {isEditing && formData._id && (
-              <button type="button" onClick={() => window.open(`/api/forms/${formData._id}/pdf`, '_blank')} className="px-4 py-2 bg-white shadow-sm text-slate-700 rounded-xl text-sm font-semibold flex items-center gap-2 border border-slate-200">
+              <button type="button" onClick={async () => {
+                try {
+                  toast.loading('Generating PDF...', { id: 'pdf-loading' });
+                  const response = await api.get(`/forms/${formData._id}/pdf`, { responseType: 'blob' });
+                  toast.dismiss('pdf-loading');
+                  const url = window.URL.createObjectURL(new Blob([response.data]));
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.setAttribute('download', `JobCard_${formData.orderNo || formData._id}.pdf`);
+                  document.body.appendChild(link);
+                  link.click();
+                  link.remove();
+                  window.URL.revokeObjectURL(url);
+                } catch (error) {
+                  toast.dismiss('pdf-loading');
+                  toast.error('Failed to generate PDF');
+                }
+              }} className="px-4 py-2 bg-white shadow-sm text-slate-700 rounded-xl text-sm font-semibold flex items-center gap-2 border border-slate-200">
                 <Eye size={16} /> View PDF
               </button>
             )}
@@ -815,17 +946,19 @@ const CreateForm = () => {
         </SectionCard>
 
         <SectionCard title="Service Type Selection" icon={Layers}>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             {[{ key: 'AMC', label: 'AMC', subtitle: 'Annual Maintenance Contract', color: 'emerald', icon: CheckSquare },
             { key: 'GPC', label: 'GPC', subtitle: 'General Pest Control', color: 'amber', icon: Bug },
             { key: 'ATT', label: 'ATT', subtitle: 'Anti Termite Treatment', color: 'blue', icon: FileCheck },
-            { key: 'BOTH', label: 'AMC + ATT', subtitle: 'Both Services', color: 'purple', icon: FileText }].map(opt => (
+            { key: 'BOTH', label: 'AMC + ATT', subtitle: 'AMC & ATT', color: 'purple', icon: FileText },
+            { key: 'GPC_ATT', label: 'GPC + ATT', subtitle: 'GPC & ATT', color: 'rose', icon: Layers }].map(opt => (
               <button key={opt.key} type="button" onClick={() => handleServiceTypeChange(opt.key)}
                 className={`p-5 rounded-2xl border-2 relative overflow-hidden ${serviceType === opt.key
                     ? opt.color === 'emerald' ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg shadow-emerald-500/30'
                       : opt.color === 'amber' ? 'bg-amber-500 border-amber-500 text-white shadow-lg shadow-amber-500/30'
                         : opt.color === 'blue' ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30'
-                          : 'bg-purple-600 border-purple-600 text-white shadow-lg shadow-purple-500/30'
+                          : opt.color === 'purple' ? 'bg-purple-600 border-purple-600 text-white shadow-lg shadow-purple-500/30'
+                            : 'bg-rose-600 border-rose-600 text-white shadow-lg shadow-rose-500/30'
                     : 'bg-white border-slate-200 text-slate-600'
                   }`}>
                 <div className="flex items-start gap-4">
@@ -849,8 +982,8 @@ const CreateForm = () => {
           </div>
         </SectionCard>
 
-        {(serviceType === 'AMC' || serviceType === 'GPC' || serviceType === 'BOTH') && (
-          <SectionCard title={serviceType === 'GPC' ? "GPC Services - General Pest Control" : "AMC Services - Pest Control"} icon={serviceType === 'GPC' ? Bug : CheckSquare} headerBg={serviceType === 'GPC' ? "bg-gradient-to-r from-amber-600 to-amber-500" : "bg-gradient-to-r from-emerald-600 to-emerald-500"}>
+        {(serviceType === 'AMC' || serviceType === 'GPC' || serviceType === 'BOTH' || serviceType === 'GPC_ATT') && (
+          <SectionCard title={serviceType === 'GPC' || serviceType === 'GPC_ATT' ? "GPC Services - General Pest Control" : "AMC Services - Pest Control"} icon={serviceType === 'GPC' || serviceType === 'GPC_ATT' ? Bug : CheckSquare} headerBg={serviceType === 'GPC' || serviceType === 'GPC_ATT' ? "bg-gradient-to-r from-amber-600 to-amber-500" : "bg-gradient-to-r from-emerald-600 to-emerald-500"}>
             {(Object.keys(serviceRates).length === 0 || rateLoading) && (
               <div className="flex items-center gap-2 mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-sm">
                 <div className="animate-spin h-4 w-4 border-2 border-amber-500 border-t-transparent rounded-full"></div>
@@ -900,7 +1033,7 @@ const CreateForm = () => {
           </SectionCard>
         )}
 
-        {(serviceType === 'ATT' || serviceType === 'BOTH') && (
+        {(serviceType === 'ATT' || serviceType === 'BOTH' || serviceType === 'GPC_ATT') && (
           <SectionCard title="ATT Services - Anti Termite Treatment" icon={FileCheck} headerBg="bg-gradient-to-r from-blue-600 to-blue-500">
 
             {/* Pre/Post Toggle */}
@@ -988,27 +1121,77 @@ const CreateForm = () => {
               </div>
             </div>
 
-            {/* Application Methods */}
-            <div className="mb-6">
-              <div className="flex items-center gap-2 mb-3">
-                <Check size={16} className="text-blue-600" />
-                <Label className="mb-0 text-blue-700">Application Method (Select Multiple)</Label>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-                {currentMethods.map(method => (
-                  <button key={method} type="button" onClick={() => toggleATTOption('methods', method)}
-                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 ${isATTOptionSelected('methods', method)
-                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg'
-                        : 'bg-white border-slate-200 text-slate-600'
+            {/* System Type - Only for PRE Treatment */}
+            {formData.attDetails.prePost === 'PRE' && (
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <Check size={16} className="text-purple-600" />
+                  <Label className="mb-0 text-purple-700">System Type</Label>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {['Liner Pipe', 'Gride Pipe', 'Ring Pipe'].map(type => (
+                    <button key={type} type="button" onClick={() => {
+                      setFormData(prev => ({
+                        ...prev,
+                        attDetails: { ...prev.attDetails, systemType: type }
+                      }));
+                    }}
+                      className={`flex items-center justify-center gap-2 p-4 rounded-xl border-2 ${
+                        formData.attDetails.systemType === type
+                          ? 'bg-purple-600 border-purple-600 text-white shadow-lg'
+                          : 'bg-white border-slate-200 text-slate-600 hover:border-purple-300'
                       }`}>
-                    <div className="mb-1">
-                      {isATTOptionSelected('methods', method) ? <CheckSquare size={20} /> : <XCircle size={20} />}
-                    </div>
-                    <span className="font-semibold text-sm">{method}</span>
-                  </button>
-                ))}
+                      <div className="mb-1">
+                        {formData.attDetails.systemType === type ? <CheckSquare size={20} /> : <XCircle size={20} />}
+                      </div>
+                      <span className="font-semibold text-sm">{type}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Pipe Quality - Only for PRE Treatment */}
+                <div className="mt-4">
+                  <Label className="mb-2 text-purple-700">Pipe Quality</Label>
+                  <select
+                    value={formData.attDetails.pipeQuality || ''}
+                    onChange={e => setFormData(prev => ({
+                      ...prev,
+                      attDetails: { ...prev.attDetails, pipeQuality: e.target.value }
+                    }))}
+                    className="w-full bg-white border border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 px-4 py-3 rounded-xl text-sm font-medium outline-none"
+                  >
+                    <option value="">Select Pipe Quality</option>
+                    {(attDropdowns?.prePipeQuality?.length > 0 ? attDropdowns.prePipeQuality : ['Termipore', 'Local Pipe Quality']).map(q => (
+                      <option key={q} value={q}>{q}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* Application Methods - Only for POST Treatment */}
+            {formData.attDetails.prePost === 'POST' && (
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <Check size={16} className="text-blue-600" />
+                  <Label className="mb-0 text-blue-700">Application Method (Select Multiple)</Label>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                  {currentMethods.map(method => (
+                    <button key={method} type="button" onClick={() => toggleATTOption('methods', method)}
+                      className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 ${isATTOptionSelected('methods', method)
+                          ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg'
+                          : 'bg-white border-slate-200 text-slate-600'
+                        }`}>
+                      <div className="mb-1">
+                        {isATTOptionSelected('methods', method) ? <CheckSquare size={20} /> : <XCircle size={20} />}
+                      </div>
+                      <span className="font-semibold text-sm">{method}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Base Solutions */}
             <div className="mb-6">
@@ -1066,6 +1249,16 @@ const CreateForm = () => {
                 {formData.attDetails.baseSolutions?.length > 0 && (
                   <p className="text-sm text-blue-700 mb-2">
                     <span className="font-semibold">Base:</span> {formData.attDetails.baseSolutions.join(', ')}
+                  </p>
+                )}
+                {formData.attDetails.systemType && (
+                  <p className="text-sm text-purple-700 mb-2">
+                    <span className="font-semibold">System Type:</span> {formData.attDetails.systemType}
+                  </p>
+                )}
+                {formData.attDetails.pipeQuality && (
+                  <p className="text-sm text-purple-700 mb-2">
+                    <span className="font-semibold">Pipe Quality:</span> {formData.attDetails.pipeQuality}
                   </p>
                 )}
               </div>
@@ -1138,8 +1331,8 @@ const CreateForm = () => {
 
         <SectionCard title="Pricing & Rate Configuration" icon={IndianRupee}>
           <div className="space-y-6">
-            {/* AMC Floor-wise Breakdown */}
-            {(serviceType === 'AMC' || serviceType === 'GPC' || serviceType === 'BOTH') && formData.amcServices.length > 0 && Object.keys(serviceRates).length > 0 && (
+            {/* AMC/GPC Floor-wise Breakdown */}
+            {(serviceType === 'AMC' || serviceType === 'GPC' || serviceType === 'BOTH' || serviceType === 'GPC_ATT') && formData.amcServices.length > 0 && Object.keys(serviceRates).length > 0 && (
               <div className="border border-emerald-200 rounded-2xl overflow-hidden">
                 <div className="bg-emerald-600 text-white px-5 py-3 font-bold text-sm flex items-center gap-2">
                   <Calculator size={16} />
@@ -1188,30 +1381,65 @@ const CreateForm = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <div className="space-y-5">
-                <div>
-                  <Label>Rate Per Square Feet (₹) - Manual Override</Label>
-                  <Input
-                    type="text"
-                    onChange={e => setFormData(prev => ({ ...prev, ratePerSqft: parseFloat(e.target.value.replace(/[^0-9]/g, '')) || 0 }))}
-                    placeholder="Enter rate per sqft"
-                    className="text-lg font-bold !py-4 flex-1"
-                  />
-                </div>
+                {/* ATT Rate - Show for ATT, BOTH, and GPC_ATT */}
+                {(serviceType === 'ATT' || serviceType === 'BOTH' || serviceType === 'GPC_ATT') && (
+                  <div>
+                    <Label>ATT Rate Per Square Feet (₹)</Label>
+                    <Input
+                      type="text"
+                      onChange={e => setFormData(prev => ({ ...prev, ratePerSqft: parseFloat(e.target.value.replace(/[^0-9]/g, '')) || 0 }))}
+                      placeholder="Enter ATT rate per sqft"
+                      className="text-lg font-bold !py-4 flex-1"
+                    />
+                  </div>
+                )}
 
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <Label>Extra Per Floor (₹)</Label>
-                    <Input type="text" onChange={e => setFormData(prev => ({ ...prev, perFloorExtra: parseFloat(e.target.value.replace(/[^0-9]/g, '')) || 0 }))} placeholder="0" />
+                {/* Separate Discounts for GPC_ATT */}
+                {serviceType === 'GPC_ATT' ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-amber-600">GPC Discount (%)</Label>
+                        <Input 
+                          type="text" 
+                          onChange={e => handleNestedChange('pricing', 'gpcDiscountPercent', e.target.value)} 
+                          placeholder="0" 
+                          className="!border-amber-200 !bg-amber-50"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-blue-600">ATT Discount (%)</Label>
+                        <Input 
+                          type="text" 
+                          onChange={e => handleNestedChange('pricing', 'attDiscountPercent', e.target.value)} 
+                          placeholder="0"
+                          className="!border-blue-200 !bg-blue-50" 
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>GST (%)</Label>
+                        <Input type="text" onChange={e => handleNestedChange('pricing', 'gstPercent', e.target.value)} placeholder="18" />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <Label>Discount (%)</Label>
-                    <Input type="text" onChange={e => handleNestedChange('pricing', 'discountPercent', e.target.value)} placeholder="0" />
+                ) : (
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <Label>Extra Per Floor (₹)</Label>
+                      <Input type="text" onChange={e => setFormData(prev => ({ ...prev, perFloorExtra: parseFloat(e.target.value.replace(/[^0-9]/g, '')) || 0 }))} placeholder="0" />
+                    </div>
+                    <div>
+                      <Label>Discount (%)</Label>
+                      <Input type="text" onChange={e => handleNestedChange('pricing', 'discountPercent', e.target.value)} placeholder="0" />
+                    </div>
+                    <div>
+                      <Label>GST (%)</Label>
+                      <Input type="text" onChange={e => handleNestedChange('pricing', 'gstPercent', e.target.value)} placeholder="18" />
+                    </div>
                   </div>
-                  <div>
-                    <Label>GST (%)</Label>
-                    <Input type="text" onChange={e => handleNestedChange('pricing', 'gstPercent', e.target.value)} placeholder="18" />
-                  </div>
-                </div>
+                )}
               </div>
 
               <div className="bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-xl">
@@ -1222,10 +1450,10 @@ const CreateForm = () => {
                 <div className="space-y-3.5 text-sm">
                   <div className="flex justify-between"><span className="text-slate-400">Total Area</span><span className="font-bold">{formData.premises.totalArea.toLocaleString('en-IN')} sqft</span></div>
 
-                  {/* AMC Section */}
+                  {/* AMC/GPC Section */}
                   {(serviceType === 'AMC' || serviceType === 'GPC' || serviceType === 'BOTH') && formData.amcServices.length > 0 && Object.keys(serviceRates).length > 0 && (
                     <div className="flex justify-between border-t border-slate-700 pt-3">
-                      <span className="text-emerald-400 font-semibold">AMC Total</span>
+                      <span className="text-emerald-400 font-semibold">{serviceType === 'GPC' ? 'GPC Total' : 'AMC Total'}</span>
                       <span className="font-bold text-emerald-400">₹{getAMCTotal().toLocaleString('en-IN')}</span>
                     </div>
                   )}
@@ -1235,6 +1463,48 @@ const CreateForm = () => {
                     <>
                       <div className="flex justify-between"><span className="text-blue-400">ATT Rate/Sq.Ft.</span><span className="font-bold">₹{formData.ratePerSqft}</span></div>
                       <div className="flex justify-between"><span className="text-blue-400">ATT Amount</span><span className="font-bold text-blue-400">₹{(formData.premises.totalArea * formData.ratePerSqft).toLocaleString('en-IN')}</span></div>
+                    </>
+                  )}
+
+                  {/* GPC + ATT Section - Separate Pricing */}
+                  {serviceType === 'GPC_ATT' && (
+                    <>
+                      {formData.amcServices.length > 0 && formData.pricing.gpcAmount > 0 && (
+                        <>
+                          <div className="flex justify-between border-t border-slate-700 pt-3">
+                            <span className="text-amber-400 font-semibold">GPC Amount</span>
+                            <span className="font-bold text-amber-400">₹{formData.pricing.gpcAmount.toLocaleString('en-IN')}</span>
+                          </div>
+                          {formData.pricing.gpcDiscountPercent > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">GPC Discount ({formData.pricing.gpcDiscountPercent}%)</span>
+                              <span className="font-bold text-red-400">-₹{formData.pricing.gpcDiscountAmount.toLocaleString('en-IN')}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between">
+                            <span className="text-amber-400 font-semibold">GPC Subtotal</span>
+                            <span className="font-bold text-amber-400">₹{formData.pricing.gpcSubtotal.toLocaleString('en-IN')}</span>
+                          </div>
+                        </>
+                      )}
+                      {formData.pricing.attAmount > 0 && (
+                        <>
+                          <div className="flex justify-between border-t border-slate-700 pt-3">
+                            <span className="text-blue-400 font-semibold">ATT Amount</span>
+                            <span className="font-bold text-blue-400">₹{formData.pricing.attAmount.toLocaleString('en-IN')}</span>
+                          </div>
+                          {formData.pricing.attDiscountPercent > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">ATT Discount ({formData.pricing.attDiscountPercent}%)</span>
+                              <span className="font-bold text-red-400">-₹{formData.pricing.attDiscountAmount.toLocaleString('en-IN')}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between">
+                            <span className="text-blue-400 font-semibold">ATT Subtotal</span>
+                            <span className="font-bold text-blue-400">₹{formData.pricing.attSubtotal.toLocaleString('en-IN')}</span>
+                          </div>
+                        </>
+                      )}
                     </>
                   )}
 
@@ -1275,11 +1545,13 @@ const CreateForm = () => {
             </div>
           )}
 
-          {/* AMC & BOTH - Custom Schedule */}
-          {(serviceType === 'AMC' || serviceType === 'BOTH') && (
+          {/* AMC, BOTH & GPC_ATT - Custom Schedule (Shared Schedule) */}
+          {(serviceType === 'AMC' || serviceType === 'BOTH' || serviceType === 'GPC_ATT') && (
             <div className="space-y-5">
               <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200">
-                <p className="text-sm font-semibold text-emerald-800 mb-3">AMC Service Schedule Configuration</p>
+                <p className="text-sm font-semibold text-emerald-800 mb-3">
+                  {serviceType === 'GPC_ATT' ? 'GPC + ATT Service Schedule Configuration (Shared)' : 'AMC Service Schedule Configuration'}
+                </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   <div>
                     <Label>First Service Date</Label>
@@ -1295,9 +1567,24 @@ const CreateForm = () => {
                   <div>
                     <Label>Total Months</Label>
                     <Input
-                      type="text"
+                      type="number"
+                      min="1"
+                      value={formData.schedule.period}
                       onChange={e => {
-                        handleNestedChange('schedule', 'period', parseInt(e.target.value.replace(/[^0-9]/g, '')) || 12);
+                        const period = parseInt(e.target.value) || 12;
+                        const serviceCount = formData.schedule.serviceCount || 1;
+                        const autoInterval = Math.ceil((period * 30) / serviceCount);
+                        setFormData(prev => ({
+                          ...prev,
+                          schedule: {
+                            ...prev.schedule,
+                            period: period,
+                            intervalDays: autoInterval
+                          }
+                        }));
+                        if (formData.schedule.date) {
+                          setTimeout(() => generateAMCSchedule(formData.schedule.date), 0);
+                        }
                       }}
                       placeholder="e.g., 12"
                     />
@@ -1305,30 +1592,37 @@ const CreateForm = () => {
                   <div>
                     <Label>Total Services</Label>
                     <Input
-                      type="text"
+                      type="number"
+                      min="1"
+                      value={formData.schedule.serviceCount}
                       onChange={e => {
-                        const count = parseInt(e.target.value.replace(/[^0-9]/g, '')) || 1;
-                        handleNestedChange('schedule', 'serviceCount', count);
+                        const rawValue = e.target.value;
+                        const count = parseInt(rawValue) || 1;
+                        const period = formData.schedule.period || 12;
+                        const autoInterval = Math.ceil((period * 30) / count);
+                        setFormData(prev => ({
+                          ...prev,
+                          schedule: {
+                            ...prev.schedule,
+                            serviceCount: count,
+                            intervalDays: autoInterval
+                          }
+                        }));
                         if (formData.schedule.date) {
-                          generateAMCSchedule(formData.schedule.date);
+                          setTimeout(() => generateAMCSchedule(formData.schedule.date), 0);
                         }
                       }}
                       placeholder="e.g., 4"
                     />
                   </div>
                   <div>
-                    <Label>Interval (Days)</Label>
-                    <Input
-                      type="text"
-                      onChange={e => {
-                        const interval = parseInt(e.target.value.replace(/[^0-9]/g, '')) || 30;
-                        handleNestedChange('schedule', 'intervalDays', interval);
-                        if (formData.schedule.date) {
-                          generateAMCSchedule(formData.schedule.date);
-                        }
-                      }}
-                      placeholder="e.g., 30"
-                    />
+                    <Label>Interval (Days) - Auto Calculated</Label>
+                    <div className="bg-white border border-emerald-200 px-4 py-3 rounded-xl text-sm font-bold text-emerald-700">
+                      {formData.schedule.intervalDays || 30} days
+                      <span className="block text-xs font-normal text-slate-500 mt-1">
+                        ≈ {Math.round((formData.schedule.intervalDays || 30) / 30)} month{((formData.schedule.intervalDays || 30) / 30) !== 1 ? 's' : ''} between services
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
 import { 
@@ -57,7 +57,7 @@ const Logistics = () => {
     },
     enabled: true,
     staleTime: 0,
-    refetchInterval: 5000
+    refetchInterval: 3000
   });
 
   const { data: activeLog } = useQuery({
@@ -67,8 +67,14 @@ const Logistics = () => {
       return res.data.data;
     },
     staleTime: 0,
-    refetchInterval: 5000
+    refetchInterval: 3000
   });
+
+  const hoursSinceStart = useMemo(() => {
+    if (!activeLog) return null;
+    const startTime = new Date(activeLog.startTime || activeLog.createdAt);
+    return (Date.now() - startTime.getTime()) / (1000 * 60 * 60);
+  }, [activeLog]);
 
   useEffect(() => {
     if (activeLog && !isAdmin) {
@@ -86,7 +92,7 @@ const Logistics = () => {
       return res.data.data || [];
     },
     staleTime: 0,
-    refetchInterval: 5000
+    refetchInterval: 3000
   });
 
   const { data: pendingApprovals } = useQuery({
@@ -97,7 +103,7 @@ const Logistics = () => {
     },
     enabled: isAdmin,
     staleTime: 0,
-    refetchInterval: 5000
+    refetchInterval: 3000
   });
 
   const startMutation = useMutation({
@@ -638,8 +644,6 @@ const Logistics = () => {
 
       {/* Active Travel Warning */}
       {activeLog && !isAdmin && (() => {
-        const startTime = new Date(activeLog.startTime || activeLog.createdAt);
-        const hoursSinceStart = (Date.now() - startTime.getTime()) / (1000 * 60 * 60);
         const hasEndMeter = !!activeLog.endMeter;
         const showWarning = hoursSinceStart > 12 && !hasEndMeter;
         

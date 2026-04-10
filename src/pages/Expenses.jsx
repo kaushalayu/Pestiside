@@ -9,6 +9,7 @@ import {
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 import { formatCurrency } from '../lib/utils';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const CATEGORY_COLORS = {
   Travel: 'bg-indigo-100 text-indigo-700',
@@ -120,6 +121,7 @@ const Expenses = () => {
   const [viewExpense, setViewExpense] = useState(null);
   const [rejectModal, setRejectModal] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null, danger: false, isLoading: false });
   const [formData, setFormData] = useState({
     category: 'Travel',
     amount: '',
@@ -349,9 +351,18 @@ const Expenses = () => {
     if (customStatus === 'BRANCH_APPROVED') {
       confirmMsg = `Branch Approve this expense of ₹${expense.amount} for ${expense.employeeId?.name}? It will then go to HQ for final approval.`;
     }
-    if (window.confirm(confirmMsg)) {
-      statusMutation.mutate({ id: expense._id, status: customStatus });
-    }
+    setConfirmDialog({
+      open: true,
+      title: customStatus === 'BRANCH_APPROVED' ? 'Branch Approve Expense' : 'Approve Expense',
+      message: confirmMsg,
+      danger: false,
+      isLoading: false,
+      onConfirm: () => {
+        setConfirmDialog(prev => ({ ...prev, isLoading: true }));
+        statusMutation.mutate({ id: expense._id, status: customStatus });
+        setConfirmDialog(prev => ({ ...prev, open: false, isLoading: false }));
+      }
+    });
   };
 
   const handleReject = (expense) => {
@@ -820,6 +831,18 @@ const Expenses = () => {
             />
           </div>
         </div>
+      )}
+
+      {/* Confirm Dialog */}
+      {confirmDialog.open && (
+        <ConfirmDialog
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          danger={confirmDialog.danger}
+          isLoading={confirmDialog.isLoading}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+        />
       )}
     </div>
   );

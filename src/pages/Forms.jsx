@@ -21,8 +21,8 @@ const Forms = () => {
   const { data: forms, isLoading } = useQuery({ 
     queryKey: ['forms'], 
     queryFn: fetchForms,
-    staleTime: 5000,
-    refetchInterval: 10000
+    staleTime: 0,
+    refetchInterval: 3000
   });
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -91,14 +91,15 @@ const Forms = () => {
 
   const getStatusActions = (form) => {
     const actions = [];
+    const isOwnForm = form.employeeId?._id === user?._id || form.employeeId === user?._id;
     
-    // EVERYONE can directly complete - no permission needed!
-    if (form.status !== 'COMPLETED' && form.status !== 'CANCELLED') {
+    // Only owner or admin can complete
+    if (form.status !== 'COMPLETED' && form.status !== 'CANCELLED' && (isOwnForm || isAdmin)) {
       actions.push({ status: 'COMPLETED', label: 'Complete', color: 'emerald', icon: CheckCircle });
     }
     
-    // Show submit button for draft forms
-    if (form.status === 'DRAFT') {
+    // Show submit button for draft forms (only owner or admin)
+    if (form.status === 'DRAFT' && (isOwnForm || isAdmin)) {
       actions.push({ status: 'SUBMITTED', label: 'Submit', color: 'blue', icon: FileCheck });
     }
     
@@ -345,11 +346,13 @@ const Forms = () => {
                           )}
                           {actions.map(action => {
                             const Icon = action.icon;
+                            const isPending = statusMutation?.isPending;
                             return (
                               <button 
                                 key={action.status}
                                 onClick={() => handleStatusChange(form, action.status)}
-                                className={`px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-semibold rounded-lg text-white flex items-center gap-1 ${
+                                disabled={isPending}
+                                className={`px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-semibold rounded-lg text-white flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed ${
                                   action.color === 'blue' ? 'bg-blue-500 hover:bg-blue-600' :
                                   action.color === 'amber' ? 'bg-amber-500 hover:bg-amber-600' :
                                   action.color === 'emerald' ? 'bg-emerald-500 hover:bg-emerald-600' :
@@ -358,7 +361,7 @@ const Forms = () => {
                                 title={action.label}
                               >
                                 <Icon size={10} className="sm:w-3 sm:h-3" />
-                                <span className="hidden sm:inline">{action.label}</span>
+                                <span className="hidden sm:inline">{isPending ? '...' : action.label}</span>
                               </button>
                             );
                           })}

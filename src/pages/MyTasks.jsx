@@ -34,8 +34,8 @@ const MyTasks = () => {
   const { data: myTasks = [], isLoading: tasksLoading, refetch: refetchTasks } = useQuery({
     queryKey: ['my-tasks', activeTab, selectedDate],
     queryFn: fetchMyTasks,
-    staleTime: 5000,
-    refetchInterval: 10000
+    staleTime: 0,
+    refetchInterval: 3000
   });
 
   const { data: myHistory = [], isLoading: historyLoading, refetch: refetchHistory } = useQuery({
@@ -45,7 +45,7 @@ const MyTasks = () => {
       return response.data.data;
     },
     enabled: activeTab === 'history',
-    staleTime: 5000
+    staleTime: 0
   });
 
   const acceptTaskMutation = useMutation({

@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import { Users, Plus, Search, MapPin, Mail, Phone, ShieldCheck, Contact, Key, Image as ImageIcon, Edit3, X, AlertCircle, Trash2, Lock } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const fetchEmployees = async () => (await api.get('/employees')).data.data;
 const fetchBranches = async () => (await api.get('/branches')).data.data;
@@ -21,6 +22,7 @@ const Employees = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [targetEmployee, setTargetEmployee] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null, danger: false, isLoading: false });
   
   const [formData, setFormData] = useState({
     name: '',
@@ -100,9 +102,18 @@ const Employees = () => {
   });
 
   const handleDelete = (emp) => {
-    if (window.confirm(`Protocol Alert: Are you sure you want to PURGE or OFFLINE ${emp.name}?`)) {
-      deleteMutation.mutate(emp._id);
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Employee',
+      message: `Are you sure you want to delete ${emp.name}? This action cannot be undone.`,
+      danger: true,
+      isLoading: false,
+      onConfirm: () => {
+        setConfirmDialog(prev => ({ ...prev, isLoading: true }));
+        deleteMutation.mutate(emp._id);
+        setConfirmDialog(prev => ({ ...prev, open: false, isLoading: false }));
+      }
+    });
   };
 
   const handleSubmit = (e) => {
@@ -350,9 +361,21 @@ const Employees = () => {
                        {resetMutation.isPending ? 'Processing...' : 'Authorize'}
                     </button>
                  </div>
-              </form>
-           </div>
-        </div>
+               </form>
+            </div>
+         </div>
+      )}
+
+      {/* Confirm Dialog */}
+      {confirmDialog.open && (
+        <ConfirmDialog
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          danger={confirmDialog.danger}
+          isLoading={confirmDialog.isLoading}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+        />
       )}
     </div>
   );

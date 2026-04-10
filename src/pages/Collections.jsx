@@ -16,7 +16,7 @@ const Collections = () => {
     },
     enabled: isAdmin,
     staleTime: 0,
-    refetchInterval: 5000,
+    refetchInterval: 3000,
   });
 
   if (!isAdmin) {
@@ -100,9 +100,9 @@ const Collections = () => {
                    <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 group-hover:bg-brand-50 group-hover:text-brand-600 transition-all">
                       <UsersIcon size={16} />
                    </div>
-                   <div className="px-2 py-0.5 bg-slate-50 text-slate-400 rounded text-[8px] font-black uppercase tracking-widest border border-slate-100 italic">
-                      Staff ID: {idx + 1}
-                   </div>
+                    <div className="px-2 py-0.5 bg-slate-50 text-slate-400 rounded text-[8px] font-black uppercase tracking-widest border border-slate-100 italic">
+                       ID: {staff.employeeId || idx + 1}
+                    </div>
                 </div>
                 
                 <h4 className="text-xs font-black text-slate-900 group-hover:text-brand-600 transition-colors uppercase truncate">{staff.employeeName}</h4>

@@ -152,7 +152,7 @@ const FormDetail = () => {
       document.body.appendChild(link);
       link.click();
       toast.success('PDF Generated');
-    } catch (_err) {
+    } catch (err) {
       console.error('PDF Error:', err);
       toast.error('PDF Generation Failed');
     }

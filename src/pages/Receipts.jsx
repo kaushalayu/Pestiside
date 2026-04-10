@@ -6,7 +6,7 @@ import api from '../lib/api';
 import toast from 'react-hot-toast';
 
 const fetchReceipts = async () => (await api.get('/receipts')).data.data;
-const fetchBranches = async () => (await api.get('/branches')).data.data;
+  const fetchBranches = async () => (await api.get('/branches?limit=100')).data.data;
 const fetchAllBookings = async () => {
   // Fetch all bookings regardless of status for receipt generation
   const response = await api.get('/forms?status=DRAFT,SUBMITTED,SCHEDULED,COMPLETED');
@@ -25,20 +25,25 @@ const Receipts = () => {
   const { data: receipts, isLoading } = useQuery({
     queryKey: ['receipts'],
     queryFn: fetchReceipts,
-    staleTime: 5000,
-    refetchInterval: 10000,
+    staleTime: 0,
+    refetchInterval: 3000,
   });
-  const { data: branches } = useQuery({
+  const { data: branches, error: branchesError, refetch: refetchBranches } = useQuery({
     queryKey: ['branches'],
-    queryFn: fetchBranches,
+    queryFn: async () => {
+      const res = await api.get('/branches?limit=100');
+      return res.data.data || [];
+    },
     enabled: user?.role === 'super_admin' || user?.role === 'branch_admin',
-    staleTime: 300000,
+    staleTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
   const { data: forms } = useQuery({
     queryKey: ['forms-for-receipt'],
     queryFn: fetchAllBookings,
-    staleTime: 5000,
-    refetchInterval: 10000,
+    staleTime: 0,
+    refetchInterval: 3000,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
   });
@@ -46,8 +51,8 @@ const Receipts = () => {
     queryKey: ['receipts-pending'],
     queryFn: fetchPendingApprovals,
     enabled: canApprove,
-    staleTime: 5000,
-    refetchInterval: 10000,
+    staleTime: 0,
+    refetchInterval: 3000,
     refetchOnWindowFocus: true,
   });
 
@@ -950,17 +955,32 @@ const Receipts = () => {
               {/* Branch */}
               {user?.role === 'super_admin' && (
                 <div className="bg-brand-50 rounded-xl p-4">
-                  <label className="text-xs font-bold text-brand-600 uppercase mb-2 block flex items-center gap-2">
-                    <Building2 size={14} /> Assign to Branch *
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-bold text-brand-600 uppercase flex items-center gap-2">
+                      <Building2 size={14} /> Assign to Branch *
+                    </label>
+                    <button 
+                      onClick={() => refetchBranches()} 
+                      className="text-xs text-brand-500 hover:text-brand-700"
+                    >
+                      🔄 Refresh
+                    </button>
+                  </div>
+                  {branchesError && <p className="text-red-500 text-sm">Error: {branchesError.message}</p>}
+                  {branches === undefined && <p className="text-amber-500 text-sm">Loading branches...</p>}
                   <select required value={formData.branchId}
                     onChange={e => setFormData({ ...formData, branchId: e.target.value })}
                     className="w-full px-3 py-2 border border-brand-200 rounded-lg text-sm">
-                    <option value="">Select Branch</option>
+                    <option value="">Select Branch ({(branches?.length) || 0})</option>
                     {branches?.map(b => (
                       <option key={b._id} value={b._id}>{b.branchName}</option>
                     ))}
                   </select>
+                  {branches?.length === 0 && (
+                    <div className="mt-2 p-2 bg-red-50 rounded-lg">
+                      <p className="text-red-600 text-xs">No branches found in database</p>
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -73,8 +73,6 @@ const Ledger = () => {
         return <Send size={16} className="text-purple-600" />;
       case 'BRANCH_PAYMENT_TO_HQ':
         return <ArrowRightLeft size={16} className="text-amber-600" />;
-      case 'CUSTOMER_RECEIPT':
-        return <Receipt size={16} className="text-emerald-600" />;
       default:
         return <Wallet size={16} className="text-slate-600" />;
     }

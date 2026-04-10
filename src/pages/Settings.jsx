@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
 import { Settings as SettingsIcon, Building2, Phone, Mail, MapPin, Save, User, Shield, Plus, Trash2, DollarSign, Edit2, X, Beaker, Globe, FileText, Upload } from 'lucide-react';
@@ -101,6 +101,7 @@ const Settings = () => {
     preChemicals: [],
     preApplicationMethods: [],
     preBaseSolutions: [],
+    prePipeQuality: [],
     postTreatmentTypes: [],
     postChemicals: [],
     postApplicationMethods: [],
@@ -108,7 +109,7 @@ const Settings = () => {
   });
 
   const [attPrePost, setAttPrePost] = useState('PRE');
-  const [newItem, setNewItem] = useState({ preTreatmentTypes: '', preChemicals: '', preApplicationMethods: '', preBaseSolutions: '', postTreatmentTypes: '', postChemicals: '', postApplicationMethods: '', postBaseSolutions: '' });
+  const [newItem, setNewItem] = useState({ preTreatmentTypes: '', preChemicals: '', preApplicationMethods: '', preBaseSolutions: '', prePipeQuality: '', postTreatmentTypes: '', postChemicals: '', postApplicationMethods: '', postBaseSolutions: '' });
 
   React.useEffect(() => {
     if (attSettings) {
@@ -117,6 +118,7 @@ const Settings = () => {
         preChemicals: attSettings.preChemicals || [],
         preApplicationMethods: attSettings.preApplicationMethods || [],
         preBaseSolutions: attSettings.preBaseSolutions || [],
+        prePipeQuality: attSettings.prePipeQuality || [],
         postTreatmentTypes: attSettings.postTreatmentTypes || [],
         postChemicals: attSettings.postChemicals || [],
         postApplicationMethods: attSettings.postApplicationMethods || [],
@@ -134,33 +136,72 @@ const Settings = () => {
     enabled: isSuperAdmin
   });
 
+  const [localRates, setLocalRates] = useState([]);
+
+  useEffect(() => {
+    if (ratesData) {
+      setLocalRates(ratesData);
+    }
+  }, [ratesData]);
+
   const createRateMutation = useMutation({
     mutationFn: (data) => api.post('/service-rates', data),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['serviceRatesAdmin']);
-      setNewRate({ serviceName: 'Cockroaches', category: 'Residential', price: '' });
+    onMutate: (newRate) => {
+      const tempId = `temp_${Date.now()}`;
+      setLocalRates(prev => [...prev, { ...newRate, _id: tempId }]);
       toast.success('Rate added');
     },
-    onError: (err) => toast.error(err.response?.data?.message || 'Failed to add rate')
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['serviceRatesAdmin'] });
+      queryClient.invalidateQueries({ queryKey: ['serviceRates'] });
+      queryClient.invalidateQueries({ queryKey: ['serviceRates', 'Residential'] });
+      queryClient.invalidateQueries({ queryKey: ['serviceRates', 'Commercial'] });
+      queryClient.invalidateQueries({ queryKey: ['serviceRates', 'Industrial'] });
+      queryClient.removeQueries({ queryKey: ['serviceRates'] });
+    },
+    onError: (err) => {
+      setLocalRates(ratesData || []);
+      toast.error(err.response?.data?.message || 'Failed to add rate');
+    }
   });
 
   const updateRateMutation = useMutation({
     mutationFn: ({ id, data }) => api.put(`/service-rates/${id}`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['serviceRatesAdmin']);
-      setEditingRate(null);
+    onMutate: ({ id, data }) => {
+      setLocalRates(prev => prev.map(r => r._id === id ? { ...r, ...data } : r));
       toast.success('Rate updated');
     },
-    onError: (err) => toast.error(err.response?.data?.message || 'Failed to update rate')
+    onError: (err) => {
+      setLocalRates(ratesData || []);
+      toast.error(err.response?.data?.message || 'Failed to update rate');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['serviceRatesAdmin'] });
+      queryClient.invalidateQueries({ queryKey: ['serviceRates'] });
+      queryClient.invalidateQueries({ queryKey: ['serviceRates', 'Residential'] });
+      queryClient.invalidateQueries({ queryKey: ['serviceRates', 'Commercial'] });
+      queryClient.invalidateQueries({ queryKey: ['serviceRates', 'Industrial'] });
+      queryClient.removeQueries({ queryKey: ['serviceRates'] });
+    }
   });
 
   const deleteRateMutation = useMutation({
     mutationFn: (id) => api.delete(`/service-rates/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['serviceRatesAdmin']);
-      toast.success('Rate removed');
+    onMutate: (id) => {
+      setLocalRates(prev => prev.filter(r => r._id !== id));
+      toast.success('Rate deleted');
     },
-    onError: (err) => toast.error(err.response?.data?.message || 'Failed to remove rate')
+    onError: (err) => {
+      setLocalRates(ratesData || []);
+      toast.error(err.response?.data?.message || 'Failed to remove rate');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['serviceRatesAdmin'] });
+      queryClient.removeQueries({ queryKey: ['serviceRates'] });
+      queryClient.invalidateQueries({ queryKey: ['serviceRates', 'Residential'] });
+      queryClient.invalidateQueries({ queryKey: ['serviceRates', 'Commercial'] });
+      queryClient.invalidateQueries({ queryKey: ['serviceRates', 'Industrial'] });
+    }
   });
 
   const handleAddRate = () => {
@@ -198,6 +239,7 @@ const Settings = () => {
     mutationFn: (data) => api.put('/settings/att-dropdowns', data),
     onSuccess: () => {
       queryClient.invalidateQueries(['attSettings']);
+      queryClient.invalidateQueries(['attDropdowns']);
       toast.success('ATT Settings updated');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to update ATT settings')
@@ -515,12 +557,12 @@ const Settings = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {ratesLoading ? (
+                    {ratesLoading && localRates.length === 0 ? (
                       <tr><td colSpan={4} className="p-4 text-center text-slate-400">Loading...</td></tr>
-                    ) : ratesData?.length === 0 ? (
+                    ) : localRates?.length === 0 ? (
                       <tr><td colSpan={4} className="p-4 text-center text-slate-400">No rates configured</td></tr>
                     ) : (
-                      ratesData?.map(rate => (
+                      localRates?.map(rate => (
                         <tr key={rate._id} className="border-b border-slate-100">
                           {editingRate?._id === rate._id ? (
                             <>
@@ -763,6 +805,23 @@ const Settings = () => {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {attLists.preBaseSolutions.map((item, i) => <span key={i} className="px-3 py-1 bg-amber-50 text-amber-700 text-xs rounded-full flex items-center gap-1">{item}<button onClick={() => removeAttItem('preBaseSolutions', i)}><X size={12} /></button></span>)}
+                  </div>
+                </div>
+              </div>
+
+              {/* PRE Pipe Quality */}
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="bg-purple-900 px-6 py-3 flex items-center gap-2">
+                  <Beaker size={16} className="text-white" />
+                  <h2 className="text-xs font-black text-white uppercase">Pre-Pipe Quality</h2>
+                </div>
+                <div className="p-4">
+                  <div className="flex gap-2 mb-3">
+                    <input type="text" value={newItem.prePipeQuality} onChange={(e) => setNewItem(prev => ({ ...prev, prePipeQuality: e.target.value }))} placeholder="Add new pipe quality" className="flex-1 px-3 py-2 border rounded-lg text-sm" />
+                    <button onClick={() => { addAttItem('prePipeQuality', newItem.prePipeQuality); setNewItem(prev => ({ ...prev, prePipeQuality: '' })); }} className="px-4 py-2 bg-purple-900 text-white rounded-lg"><Plus size={16} /></button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {attLists.prePipeQuality.map((item, i) => <span key={i} className="px-3 py-1 bg-purple-50 text-purple-700 text-xs rounded-full flex items-center gap-1">{item}<button onClick={() => removeAttItem('prePipeQuality', i)}><X size={12} /></button></span>)}
                   </div>
                 </div>
               </div>

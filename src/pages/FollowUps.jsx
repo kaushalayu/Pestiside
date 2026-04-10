@@ -174,14 +174,14 @@ const FollowUps = () => {
       return (await api.get(`/leads/followups?${p}`)).data;
     },
     staleTime: 0,
-    refetchInterval: 5000,
+    refetchInterval: 3000,
   });
 
   const { data: statsRes } = useQuery({
     queryKey: ['leadStats'],
     queryFn: async () => (await api.get('/leads/stats')).data?.data || {},
     staleTime: 0,
-    refetchInterval: 5000,
+    refetchInterval: 3000,
   });
 
   const followUpMutation = useMutation({

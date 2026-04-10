@@ -35,7 +35,7 @@ const DashboardLayout = () => {
       const res = await api.get('/notifications');
       return res.data;
     },
-    refetchInterval: 60000,
+    refetchInterval: 10000,
   });
 
   const notifications = notificationsData?.data || [];

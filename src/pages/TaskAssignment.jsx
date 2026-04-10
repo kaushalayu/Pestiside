@@ -12,10 +12,16 @@ const TaskAssignment = () => {
   const isSuperAdmin = user?.role === 'super_admin';
   const isBranchAdmin = user?.role === 'branch_admin';
 
+  const getDefaultDate = (daysOffset = 0) => {
+    const d = new Date();
+    d.setDate(d.getDate() + daysOffset);
+    return d.toISOString().split('T')[0];
+  };
+
   const [activeTab, setActiveTab] = useState('bookings');
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [startDate, setStartDate] = useState(format(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'));
-  const [endDate, setEndDate] = useState(format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'));
+  const [selectedDate, setSelectedDate] = useState(getDefaultDate(0));
+  const [startDate, setStartDate] = useState(getDefaultDate(-7));
+  const [endDate, setEndDate] = useState(getDefaultDate(7));
   const [selectedBranch, setSelectedBranch] = useState(isBranchAdmin ? user?.branchId?._id : '');
   const [filterStatus, setFilterStatus] = useState('UNASSIGNED');
 
@@ -31,12 +37,6 @@ const TaskAssignment = () => {
 
   const [showWorkloadSidebar, setShowWorkloadSidebar] = useState(false);
 
-  useEffect(() => {
-    if (isSuperAdmin) {
-      fetchBranches();
-    }
-  }, [isSuperAdmin]);
-
   const fetchBranches = async () => {
     try {
       const response = await api.get('/branches');
@@ -46,7 +46,13 @@ const TaskAssignment = () => {
     }
   };
 
-  const { data: unassignedData, isLoading: unassignedLoading, refetch: refetchUnassigned } = useQuery({
+  useEffect(() => {
+    if (isSuperAdmin) {
+      fetchBranches();
+    }
+  }, [isSuperAdmin, fetchBranches]);
+
+  const { data: unassignedData, isLoading: unassignedLoading } = useQuery({
     queryKey: ['unassigned-bookings', startDate, endDate, selectedBranch],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -56,8 +62,8 @@ const TaskAssignment = () => {
       const response = await api.get(`/task-assignments/unassigned-bookings?${params.toString()}`);
       return response.data.data || [];
     },
-    staleTime: 5000,
-    refetchInterval: 10000
+    staleTime: 0,
+    refetchInterval: 3000
   });
 
   const { data: assignmentsData, isLoading: assignmentsLoading, refetch: refetchAssignments } = useQuery({
@@ -71,8 +77,8 @@ const TaskAssignment = () => {
       const response = await api.get(`/task-assignments?${params.toString()}`);
       return response.data.data || [];
     },
-    staleTime: 5000,
-    refetchInterval: 10000
+    staleTime: 0,
+    refetchInterval: 3000
   });
 
   const { data: workloadData, refetch: refetchWorkload } = useQuery({
@@ -86,8 +92,8 @@ const TaskAssignment = () => {
       const response = await api.get(`/task-assignments/employee-workload?${params.toString()}`);
       return response.data.data || [];
     },
-    staleTime: 5000,
-    refetchInterval: 10000
+    staleTime: 0,
+    refetchInterval: 3000
   });
 
   const unassignedBookings = unassignedData || [];
@@ -852,6 +858,26 @@ const TaskAssignment = () => {
               </p>
             </div>
             <div className="p-6 flex-1 overflow-y-auto">
+              {isSuperAdmin && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Filter by Branch</label>
+                  <select
+                    value={selectedBranch}
+                    onChange={(e) => {
+                      setSelectedBranch(e.target.value);
+                      fetchAvailableEmployees(selectedDate, e.target.value);
+                    }}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">All Branches</option>
+                    {branches.map((branch) => (
+                      <option key={branch._id} value={branch._id}>
+                        {branch.branchName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="mb-4">
                 <label className="block text-sm font-medium text-slate-700 mb-3">
                   Select Employee - Showing employees by workload (Free employees first)

@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import { Building2, Plus, Search, MapPin, Mail, Phone, ShieldCheck, Edit3, Trash2, Lock, Power, PowerOff } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const fetchBranches = async () => (await api.get('/branches')).data.data;
 
@@ -14,6 +15,7 @@ const Branches = () => {
   const { data: branches, isLoading } = useQuery({ queryKey: ['branches'], queryFn: fetchBranches });
   
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null, danger: false, isLoading: false });
   const [formData, setFormData] = useState({
     branchName: '',
     city: '',
@@ -61,9 +63,18 @@ const Branches = () => {
   });
 
   const handleDelete = (branch) => {
-    if (window.confirm(`Protocol Alert: Are you sure you want to PURGE franchise ${branch.branchName}?`)) {
-      deleteMutation.mutate(branch._id);
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Branch',
+      message: `Are you sure you want to delete ${branch.branchName}? This action cannot be undone.`,
+      danger: true,
+      isLoading: false,
+      onConfirm: () => {
+        setConfirmDialog(prev => ({ ...prev, isLoading: true }));
+        deleteMutation.mutate(branch._id);
+        setConfirmDialog(prev => ({ ...prev, open: false, isLoading: false }));
+      }
+    });
   };
 
   const handleSubmit = (e) => {
@@ -219,9 +230,21 @@ const Branches = () => {
                    <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors">Cancel</button>
                    <button disabled={mutation.isPending} type="submit" className="premium-btn">{mutation.isPending ? 'Registering...' : 'Complete Registry'}</button>
                  </div>
-              </form>
-           </div>
-        </div>
+               </form>
+            </div>
+         </div>
+      )}
+
+      {/* Confirm Dialog */}
+      {confirmDialog.open && (
+        <ConfirmDialog
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          danger={confirmDialog.danger}
+          isLoading={confirmDialog.isLoading}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+        />
       )}
     </div>
   );

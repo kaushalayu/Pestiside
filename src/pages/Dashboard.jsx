@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
@@ -10,18 +10,36 @@ import {
   Users, FileText, Building2, TrendingUp, Activity,
   IndianRupee, ArrowUpRight, Calendar, Clock,
   CheckCircle, AlertCircle, Mail, Receipt, Plus, Building, Wallet, RefreshCw,
-  Target, Phone, Star, UserCheck
+  Target, Phone, Star, UserCheck, Package, Beaker, Send, Check, X, Filter
 } from 'lucide-react';
 import api from '../lib/api';
+import toast from 'react-hot-toast';
+import { useQueryClient } from '@tanstack/react-query';
 
-const fetchDashboardData = async () => {
-  const res = await api.get('/dashboard/combined');
+const fetchDashboardData = async (branchId = null) => {
+  const params = branchId ? `?branchId=${branchId}` : '';
+  const res = await api.get(`/dashboard/combined${params}`);
   return res.data.data;
+};
+
+const fetchBranches = async () => {
+  const res = await api.get('/branches');
+  return res.data.data || [];
 };
 
 const fetchHQSummary = async () => {
   const res = await api.get('/payments/hq-summary');
   return res.data.data;
+};
+
+const fetchTechnicianInventory = async () => {
+  const res = await api.get('/employee-inventory/my-inventory');
+  return res.data.data || [];
+};
+
+const fetchTechnicianDistributions = async () => {
+  const res = await api.get('/employee-distributions/my-distributions');
+  return res.data.data || [];
 };
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
@@ -59,25 +77,77 @@ const StatCard = ({ title, value, subtitle, icon: IconComponent, color = 'emeral
 const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useSelector(state => state.auth);
+  const queryClient = useQueryClient();
   const isSuperAdmin = user?.role === 'super_admin';
   const isAdmin = user?.role === 'super_admin' || user?.role === 'branch_admin';
   const isTechnician = user?.role === 'technician' || user?.role === 'sales';
   const isOffice = user?.role === 'office';
+  const [selectedBranchId, setSelectedBranchId] = useState(null);
+
+  const { data: branches = [] } = useQuery({
+    queryKey: ['branches'],
+    queryFn: fetchBranches,
+    enabled: isSuperAdmin,
+  });
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: fetchDashboardData,
+    queryKey: ['dashboard', selectedBranchId],
+    queryFn: () => fetchDashboardData(selectedBranchId),
     staleTime: 0,
-    refetchInterval: 5000,
+    refetchInterval: 3000,
   });
 
   const { data: hqSummary, refetch: refetchHQ } = useQuery({
     queryKey: ['hqSummary'],
     queryFn: fetchHQSummary,
     staleTime: 0,
-    refetchInterval: 10000,
+    refetchInterval: 3000,
     enabled: isAdmin,
   });
+
+  // Technician specific queries
+  const { data: techInventory = [] } = useQuery({
+    queryKey: ['techInventory', user?._id],
+    queryFn: fetchTechnicianInventory,
+    enabled: isTechnician && Boolean(user?._id),
+    staleTime: 0,
+    refetchInterval: 3000,
+  });
+
+  const { data: techDistributions = [] } = useQuery({
+    queryKey: ['techDistributions', user?._id],
+    queryFn: fetchTechnicianDistributions,
+    enabled: isTechnician && Boolean(user?._id),
+    staleTime: 0,
+    refetchInterval: 3000,
+  });
+
+  // Accept/Reject distribution handlers
+  const handleAcceptDistribution = async (id) => {
+    try {
+      await api.post(`/employee-distributions/${id}/approve`);
+      toast.success('Stock accepted!');
+      queryClient.invalidateQueries({ queryKey: ['techDistributions'] });
+      queryClient.invalidateQueries({ queryKey: ['techInventory'] });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Error accepting');
+    }
+  };
+
+  const handleRejectDistribution = async (id) => {
+    try {
+      await api.post(`/employee-distributions/${id}/reject`);
+      toast.success('Request rejected');
+      queryClient.invalidateQueries({ queryKey: ['techDistributions'] });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Error rejecting');
+    }
+  };
+
+  // Calculate technician totals
+  const pendingDists = techDistributions.filter(d => d.status === 'PENDING');
+  const totalStock = techInventory.reduce((sum, i) => sum + (i.currentStock || 0), 0);
+  const totalBottles = techInventory.reduce((sum, i) => sum + (i.totalReceived || 0) / (i.bottleSize || 1), 0);
 
   if (isLoading) {
     return (
@@ -125,6 +195,25 @@ const Dashboard = () => {
             Real-time metrics
           </p>
         </div>
+        
+        {/* Super Admin Branch Filter */}
+        {isSuperAdmin && branches.length > 0 && (
+          <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border">
+            <Filter size={14} className="text-slate-400" />
+            <select
+              value={selectedBranchId || ''}
+              onChange={(e) => setSelectedBranchId(e.target.value || null)}
+              className="text-xs sm:text-sm border-none bg-transparent focus:ring-0 p-0 font-medium text-slate-700"
+            >
+              <option value="">All Branches</option>
+              {branches.map(branch => (
+                <option key={branch._id} value={branch._id}>
+                  {branch.branchName}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <button onClick={() => { refetch(); if (refetchHQ) refetchHQ(); }} className="px-3 sm:px-4 py-2 sm:py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg sm:rounded-xl font-bold text-[10px] sm:text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 sm:gap-2 flex-1 sm:flex-none">
             <RefreshCw size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Refresh</span>
@@ -183,35 +272,93 @@ const Dashboard = () => {
       {(isAdmin || isOffice) && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="bg-white rounded-2xl border border-slate-200 p-6 lg:col-span-2">
-            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">
-              {isSuperAdmin ? 'Revenue by Branch' : 'Branch Revenue'}
-            </h3>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-emerald-100 rounded-xl">
+                <TrendingUp size={18} className="text-emerald-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-800">
+                  {isSuperAdmin && selectedBranchId ? 'Selected Branch Revenue' : isSuperAdmin ? 'Revenue by Branch' : 'Branch Revenue'}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {selectedBranchId ? branches.find(b => b._id === selectedBranchId)?.branchName || 'Branch' : 'All branches combined'}
+                </p>
+              </div>
+            </div>
+            
             {revenue.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
+                {/* Total Revenue Card */}
+                <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl p-4 text-white mb-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-emerald-100 text-xs font-medium">Total Collection</p>
+                      <p className="text-3xl font-black mt-1">
+                        ₹{(revenue.reduce((sum, r) => sum + (r.totalCollected || 0), 0)).toLocaleString('en-IN')}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-emerald-400/30 rounded-xl">
+                      <IndianRupee size={28} />
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Branch-wise breakdown */}
                 {revenue.map((r, idx) => (
-                  <div key={idx} className="flex items-center gap-3">
-                    <div className="flex-1">
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="font-semibold text-slate-700">{r.branchName || 'Unknown'}</span>
-                        <span className="text-emerald-600 font-bold">₹{(r.totalCollected || 0).toLocaleString('en-IN')}</span>
+                  <div key={idx} className="bg-slate-50 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold ${
+                          idx === 0 ? 'bg-emerald-500' : idx === 1 ? 'bg-blue-500' : idx === 2 ? 'bg-purple-500' : 'bg-slate-400'
+                        }`}>
+                          {idx + 1}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-800 text-sm">{r.branchName || 'Unknown'}</p>
+                          <p className="text-xs text-slate-500">
+                            {(() => {
+                              const total = revenue.reduce((sum, x) => sum + (x.totalCollected || 0), 0);
+                              return total > 0 ? `${((r.totalCollected / total) * 100).toFixed(1)}%` : '0%';
+                            })()} of total
+                          </p>
+                        </div>
                       </div>
-                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-emerald-500 rounded-full transition-all" 
-                          style={{ width: `${Math.min(100, (r.totalCollected / (revenue[0]?.totalCollected || 1)) * 100)}%` }}
-                        ></div>
+                      <div className="text-right">
+                        <p className="text-lg font-black text-emerald-600">₹{(r.totalCollected || 0).toLocaleString('en-IN')}</p>
                       </div>
+                    </div>
+                    <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full transition-all ${
+                          idx === 0 ? 'bg-emerald-500' : idx === 1 ? 'bg-blue-500' : idx === 2 ? 'bg-purple-500' : 'bg-slate-400'
+                        }`}
+                        style={{ width: `${Math.min(100, (r.totalCollected / (revenue[0]?.totalCollected || 1)) * 100)}%` }}
+                      ></div>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-slate-400 text-center py-8">No revenue data</p>
+              <div className="text-center py-12">
+                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <TrendingUp size={28} className="text-slate-400" />
+                </div>
+                <p className="text-slate-500 font-medium">No revenue data available</p>
+                <p className="text-slate-400 text-xs mt-1">Revenue will appear here once receipts are approved</p>
+              </div>
             )}
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200 p-6">
-            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Enquiry Status</h3>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-purple-100 rounded-xl">
+                <Target size={18} className="text-purple-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-800">Enquiry Status</h3>
+                <p className="text-xs text-slate-500">Lead pipeline</p>
+              </div>
+            </div>
             {funnelData.length > 0 ? (
               <div className="flex flex-col items-center">
                 <div className="w-full max-w-[180px] aspect-square">
@@ -245,7 +392,12 @@ const Dashboard = () => {
                 </div>
               </div>
             ) : (
-              <p className="text-slate-400 text-center py-8">No enquiries</p>
+              <div className="text-center py-8">
+                <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Target size={20} className="text-slate-400" />
+                </div>
+                <p className="text-slate-400 text-sm">No enquiries</p>
+              </div>
             )}
           </div>
         </div>
@@ -354,14 +506,108 @@ const Dashboard = () => {
                 <span className="text-xs font-semibold text-purple-700 text-center">Receipts</span>
               </button>
               <button 
-                onClick={() => navigate('/logistics')}
-                className="flex flex-col items-center gap-2 p-4 bg-amber-50 hover:bg-amber-100 rounded-xl transition-colors"
+                onClick={() => navigate('/inventory')}
+                className="flex flex-col items-center gap-2 p-4 bg-orange-50 hover:bg-orange-100 rounded-xl transition-colors relative"
               >
-                <Activity size={24} className="text-amber-600" />
-                <span className="text-xs font-semibold text-amber-700 text-center">Travel Log</span>
+                <Package size={24} className="text-orange-600" />
+                <span className="text-xs font-semibold text-orange-700 text-center">Inventory</span>
+                {pendingDists.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold">
+                    {pendingDists.length}
+                  </span>
+                )}
               </button>
             </div>
           </div>
+
+          {/* Technician Stock Summary */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="bg-linear-to-br from-blue-600 to-blue-700 p-4 rounded-xl text-white shadow-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Package size={16} />
+                <span className="text-[10px] font-semibold uppercase opacity-80">Total Items</span>
+              </div>
+              <p className="text-2xl font-black">{techInventory.length}</p>
+              <p className="text-[10px] opacity-60">Chemicals</p>
+            </div>
+            <div className="bg-linear-to-br from-emerald-600 to-emerald-700 p-4 rounded-xl text-white shadow-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Beaker size={16} />
+                <span className="text-[10px] font-semibold uppercase opacity-80">Total Stock</span>
+              </div>
+              <p className="text-2xl font-black">{totalStock.toFixed(1)} L</p>
+              <p className="text-[10px] opacity-60">Available</p>
+            </div>
+            <div className="bg-linear-to-br from-purple-600 to-purple-700 p-4 rounded-xl text-white shadow-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Send size={16} />
+                <span className="text-[10px] font-semibold uppercase opacity-80">Pending</span>
+              </div>
+              <p className="text-2xl font-black">{pendingDists.length}</p>
+              <p className="text-[10px] opacity-60">Requests</p>
+            </div>
+            <button 
+              onClick={() => navigate('/inventory')}
+              className="bg-linear-to-br from-orange-600 to-orange-700 p-4 rounded-xl text-white shadow-lg hover:from-orange-500 hover:to-orange-600 transition-all"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <Wallet size={16} />
+                <ArrowUpRight size={16} />
+              </div>
+              <p className="text-2xl font-black">View</p>
+              <p className="text-[10px] opacity-60">Full Inventory</p>
+            </button>
+          </div>
+
+          {/* Pending Distributions */}
+          {pendingDists.length > 0 && (
+            <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-100 rounded-xl">
+                    <Send size={20} className="text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-amber-800">Pending Stock Requests!</h3>
+                    <p className="text-amber-600 text-xs">{pendingDists.length} request(s) waiting for your response</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => navigate('/inventory')}
+                  className="px-4 py-2 bg-amber-500 text-white rounded-lg text-xs font-bold hover:bg-amber-600"
+                >
+                  View All
+                </button>
+              </div>
+              <div className="space-y-2">
+                {pendingDists.slice(0, 3).map(dist => (
+                  <div key={dist._id} className="flex items-center justify-between bg-white p-3 rounded-xl border border-amber-100">
+                    <div>
+                      <p className="font-bold text-slate-800 text-sm">From: {dist.branchId?.branchName || 'Branch'}</p>
+                      <p className="text-xs text-slate-500">
+                        {dist.items?.length} items • {dist.totalQuantity}L
+                        {dist.items?.[0]?.bottles && ` • ${dist.items[0].bottles} bottles`}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => handleAcceptDistribution(dist._id)}
+                        className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 flex items-center gap-1"
+                      >
+                        <Check size={12} /> Accept
+                      </button>
+                      <button 
+                        onClick={() => handleRejectDistribution(dist._id)}
+                        className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-bold hover:bg-red-600 flex items-center gap-1"
+                      >
+                        <X size={12} /> Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Recent Activity for Technicians */}
           <div className="bg-white rounded-2xl border border-slate-200 p-5 md:p-6">

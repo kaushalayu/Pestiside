@@ -49,7 +49,8 @@ const Complains = () => {
     customerPhone: '',
     complainType: 'SERVICE_QUALITY',
     description: '',
-    priority: 'MEDIUM'
+    priority: 'MEDIUM',
+    complainBranchId: ''
   });
 
   const { data: myComplains, refetch: refetchMy } = useQuery({
@@ -178,7 +179,8 @@ const Complains = () => {
     customerPhone: '',
     complainType: 'SERVICE_QUALITY',
     description: '',
-    priority: 'MEDIUM'
+    priority: 'MEDIUM',
+    complainBranchId: ''
   });
 
   const handleSubmit = (e) => {
@@ -209,7 +211,7 @@ const Complains = () => {
             {isSuperAdmin ? 'Manage and assign complains' : 'Submit your complains'}
           </p>
         </div>
-        {!isSuperAdmin && (
+        {user?.role !== 'employee' && (
           <button
             onClick={() => setIsModalOpen(true)}
             className="px-4 py-2.5 bg-red-600 text-white rounded-xl font-semibold text-sm flex items-center gap-2 hover:bg-red-700 shadow-lg shadow-red-600/30"
@@ -406,6 +408,23 @@ const Complains = () => {
                   placeholder="Optional"
                 />
               </div>
+
+              {isSuperAdmin && (
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 uppercase block mb-1">Branch *</label>
+                  <select 
+                    value={formData.complainBranchId}
+                    onChange={e => setFormData({...formData, complainBranchId: e.target.value})}
+                    className="w-full border border-slate-200 rounded-lg p-2 text-sm"
+                    required
+                  >
+                    <option value="">Select a branch</option>
+                    {branches?.map(branch => (
+                      <option key={branch._id} value={branch._id}>{branch.branchName} - {branch.city}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="text-xs font-semibold text-slate-600 uppercase block mb-1">Complain Type *</label>

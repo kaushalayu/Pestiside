@@ -26,7 +26,7 @@ const Reports = () => {
         start = new Date(now.setHours(0, 0, 0, 0));
         end = new Date(now.setHours(23, 59, 59, 999));
         break;
-      case 'this_week':
+      case 'this_week': {
         const dayOfWeek = now.getDay();
         start = new Date(now);
         start.setDate(now.getDate() - dayOfWeek);
@@ -35,15 +35,17 @@ const Reports = () => {
         end.setDate(start.getDate() + 6);
         end.setHours(23, 59, 59, 999);
         break;
+      }
       case 'this_month':
         start = startOfMonth(now);
         end = endOfMonth(now);
         break;
-      case 'last_month':
+      case 'last_month': {
         const lastMonth = subMonths(now, 1);
         start = startOfMonth(lastMonth);
         end = endOfMonth(lastMonth);
         break;
+      }
       default:
         start = startOfMonth(now);
         end = endOfMonth(now);
@@ -62,7 +64,7 @@ const Reports = () => {
       const res = await api.get(`/forms?startDate=${dateRangeFilter.startDate}&endDate=${dateRangeFilter.endDate}`);
       return res.data?.data || [];
     },
-    staleTime: 60000, // 1 minute
+    staleTime: 0,
   });
 
   const { data: receipts = [] } = useQuery({
@@ -71,7 +73,7 @@ const Reports = () => {
       const res = await api.get(`/receipts?startDate=${dateRangeFilter.startDate}&endDate=${dateRangeFilter.endDate}`);
       return res.data?.data || [];
     },
-    staleTime: 60000,
+    staleTime: 0,
   });
 
   const { data: expenses = [] } = useQuery({
@@ -80,7 +82,7 @@ const Reports = () => {
       const res = await api.get(`/expenses?startDate=${dateRangeFilter.startDate}&endDate=${dateRangeFilter.endDate}`);
       return res.data?.data || [];
     },
-    staleTime: 60000,
+    staleTime: 0,
   });
 
   const { data: inventoryUsage = [] } = useQuery({
@@ -89,7 +91,7 @@ const Reports = () => {
       const res = await api.get('/employee-inventory/usage-history');
       return res.data?.data || [];
     },
-    staleTime: 120000, // 2 minutes
+    staleTime: 0,
   });
 
   const { data: taskHistory = [] } = useQuery({
@@ -183,7 +185,7 @@ const Reports = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-medium opacity-80">Collection</p>
-                  <p className="text-2xl font-bold mt-1">₹{formatCurrency(stats.totalCollection)}</p>
+                  <p className="text-2xl font-bold mt-1">{formatCurrency(stats.totalCollection)}</p>
                 </div>
                 <IndianRupee size={32} className="opacity-50" />
               </div>
@@ -193,7 +195,7 @@ const Reports = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-medium opacity-80">Expenses</p>
-                  <p className="text-2xl font-bold mt-1">₹{formatCurrency(stats.totalExpenses)}</p>
+                  <p className="text-2xl font-bold mt-1">{formatCurrency(stats.totalExpenses)}</p>
                 </div>
                 <TrendingUp size={32} className="opacity-50" />
               </div>

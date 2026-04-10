@@ -5,6 +5,7 @@ import api from '../lib/api';
 import { Package, Plus, Send, History, Beaker, User as UserIcon, Building2, Trash2, ArrowRightLeft, DollarSign, CreditCard, TrendingUp, AlertCircle, CheckCircle, Clock, RotateCcw, ShoppingCart, Upload, Wallet, ArrowRight, ArrowDown, ChevronRight, FileText, IndianRupee } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatCurrency } from '../lib/utils';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const Badge = ({ children, variant = 'default' }) => {
   const styles = {
@@ -88,6 +89,7 @@ const Inventory = () => {
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showDistributeModal, setShowDistributeModal] = useState(false);
   const [showNewChemicalForm, setShowNewChemicalForm] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null, danger: false, isLoading: false });
 
   const [transferForm, setTransferForm] = useState({
     branchId: '',
@@ -98,7 +100,7 @@ const Inventory = () => {
 
   const [distributeForm, setDistributeForm] = useState({
     employeeId: '',
-    items: [{ chemicalId: '', quantity: '', unit: 'L' }],
+    items: [{ chemicalId: '', quantity: '', unit: 'L', bottles: '' }],
     notes: ''
   });
 
@@ -234,13 +236,13 @@ const Inventory = () => {
     queryKey: ['chemicals'],
     queryFn: fetchChemicals,
     enabled: Boolean(user?._id),
-    staleTime: 300000
+    staleTime: 0
   });
   const inventoryQuery = useQuery({
     queryKey: ['inventory'],
     queryFn: fetchInventoryData,
     enabled: Boolean(user?._id),
-    staleTime: 300000
+    staleTime: 0
   });
   const transactionsQuery = useQuery({
     queryKey: ['transactions'],
@@ -256,7 +258,7 @@ const Inventory = () => {
     queryKey: ['stockTransfers'],
     queryFn: fetchStockTransfers,
     enabled: Boolean(user?._id),
-    staleTime: 300000
+    staleTime: 0
   });
   const companySettingsQuery = useQuery({
     queryKey: ['companySettings'],
@@ -500,7 +502,9 @@ const Inventory = () => {
         items: validItems.map(item => ({
           chemicalId: item.chemicalId,
           quantity: parseFloat(item.quantity),
-          unit: item.unit || 'L'
+          unit: item.unit || 'L',
+          bottles: parseInt(item.bottles) || 0,
+          bottleSize: item.bottleSize || ''
         })),
         notes: transferForm.notes
       });
@@ -536,7 +540,7 @@ const Inventory = () => {
       setShowDistributeModal(false);
       setDistributeForm({
         employeeId: '',
-        items: [{ chemicalId: '', quantity: '', unit: 'L' }],
+        items: [{ chemicalId: '', quantity: '', unit: 'L', bottles: '' }],
         notes: ''
       });
 
@@ -638,6 +642,8 @@ const Inventory = () => {
     chemicalId: '',
     quantity: '',
     unit: 'ML',
+    bottles: '',
+    bottleSize: '',
     notes: ''
   });
 
@@ -655,7 +661,9 @@ const Inventory = () => {
           items: [{
             chemicalId: sendForm.chemicalId,
             quantity: parseFloat(sendForm.quantity),
-            unit: sendForm.unit
+            unit: sendForm.unit,
+            bottles: parseInt(sendForm.bottles) || 0,
+            bottleSize: sendForm.bottleSize || ''
           }],
           notes: sendForm.notes
         });
@@ -878,19 +886,26 @@ const Inventory = () => {
   };
 
   const handleDeleteChemical = async (chemId) => {
-    if (window.confirm('Delete this chemical?')) {
-      try {
-        await api.delete(`/inventory/chemicals/${chemId}`);
-        toast.success('Chemical deleted');
-
-        // Optimistic update - remove from list
-        setChemicals(prev => prev.filter(c => c._id !== chemId));
-
-        refreshQueries();
-      } catch (error) {
-        toast.error(error.response?.data?.message || 'Error deleting');
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Chemical',
+      message: 'Are you sure you want to delete this chemical? This action cannot be undone.',
+      danger: true,
+      isLoading: false,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isLoading: true }));
+        try {
+          await api.delete(`/inventory/chemicals/${chemId}`);
+          toast.success('Chemical deleted');
+          setChemicals(prev => prev.filter(c => c._id !== chemId));
+          refreshQueries();
+        } catch (error) {
+          toast.error(error.response?.data?.message || 'Error deleting');
+        } finally {
+          setConfirmDialog(prev => ({ ...prev, open: false, isLoading: false }));
+        }
       }
-    }
+    });
   };
 
   const getChemicalStock = (chemId) => {
@@ -1030,7 +1045,7 @@ const Inventory = () => {
             {/* Branch Admin Dashboard */}
             {user.role === 'branch_admin' && (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
                   <div className="bg-linear-to-br from-blue-600 to-blue-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
                     <div className="flex items-center gap-2 mb-2">
                       <Package size={16} />
@@ -1050,6 +1065,16 @@ const Inventory = () => {
                       {inventory.filter(i => i.ownerType === 'Employee').reduce((sum, i) => sum + (i.displayQuantity || 0), 0)} L
                     </p>
                     <p className="text-[9px] md:text-[10px] opacity-60 mt-1">To Employees</p>
+                  </div>
+                  <div className="bg-linear-to-br from-orange-600 to-orange-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Beaker size={14} className="md:w-4 md:h-4" />
+                      <span className="text-[9px] md:text-[10px] font-semibold uppercase opacity-80">Bottles</span>
+                    </div>
+                    <p className="text-xl md:text-2xl font-black truncate">
+                      {inventory.filter(i => i.ownerType === 'Branch').reduce((sum, i) => sum + (i.bottles || 0), 0)}
+                    </p>
+                    <p className="text-[9px] md:text-[10px] opacity-60 mt-1">At Branch</p>
                   </div>
                   <div className="bg-linear-to-br from-emerald-600 to-emerald-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
                     <div className="flex items-center gap-2 mb-2">
@@ -1337,9 +1362,11 @@ const Inventory = () => {
                           <td className="py-3 px-4 text-right">₹{chem.purchasePrice || 0}</td>
                           <td className="py-3 px-4 text-right font-bold text-green-600">₹{Math.round((chem.purchasePrice || 0) * 1.1 * 100) / 100}</td>
                           <td className="py-3 px-4 text-center">
-                            <button onClick={() => handleDeleteChemical(chem._id)} className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200">
-                              <Trash2 size={16} />
-                            </button>
+                            {isSuperAdmin && (
+                              <button onClick={() => handleDeleteChemical(chem._id)} className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200">
+                                <Trash2 size={16} />
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -1375,7 +1402,7 @@ const Inventory = () => {
                 <p className="text-[10px] font-semibold uppercase opacity-80">Pending Balance</p>
                 <p className="text-2xl font-black">{formatCurrency(myBalance?.pendingBalance || 0)}</p>
               </div>
-              <div className="bg-linear-to-brbg-linear-to-br from-purple-600 to-purple-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+              <div className="bg-gradient-to-br from-purple-600 to-purple-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
                 <p className="text-[10px] font-semibold uppercase opacity-80">Collections</p>
                 <p className="text-2xl font-black">{formatCurrency(collections)}</p>
               </div>
@@ -1545,7 +1572,7 @@ const Inventory = () => {
         {activeTab === 'distribute' && user.role === 'branch_admin' && (
           <div className="space-y-6">
             {/* Branch Stock Summary */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
               <div className="bg-linear-to-br from-blue-600 to-blue-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
                 <p className="text-[10px] font-semibold uppercase opacity-80">Branch Stock</p>
                 <p className="text-2xl font-black">
@@ -1563,6 +1590,12 @@ const Inventory = () => {
                 <p className="text-2xl font-black">
                   {(inventory.filter(i => i.ownerType === 'Branch').reduce((sum, i) => sum + (i.displayQuantity || 0), 0) -
                     inventory.filter(i => i.ownerType === 'Employee').reduce((sum, i) => sum + (i.displayQuantity || 0), 0)).toFixed(1)} L
+                </p>
+              </div>
+              <div className="bg-linear-to-br from-orange-600 to-orange-700 p-4 md:p-5 rounded-2xl text-white shadow-xl">
+                <p className="text-[10px] font-semibold uppercase opacity-80">Bottles</p>
+                <p className="text-2xl font-black">
+                  {inventory.filter(i => i.ownerType === 'Branch').reduce((sum, i) => sum + (i.bottles || 0), 0)}
                 </p>
               </div>
             </div>
@@ -1594,12 +1627,15 @@ const Inventory = () => {
                   >
                     <option value="">Select Chemical</option>
                     {inventory.filter(i => i.ownerType === 'Branch' && (i.displayQuantity || 0) > 0).map(inv => (
-                      <option key={inv._id} value={inv.chemicalId?._id}>{inv.chemicalId?.name} (Available: {inv.displayQuantity || 0} {inv.displayUnit || 'L'})</option>
+                      <option key={inv._id} value={inv.chemicalId?._id}>
+                        {inv.chemicalId?.name} (Avail: {inv.displayQuantity || 0} {inv.displayUnit || 'L'}
+                        {inv.bottles > 0 ? ` • ${inv.bottles} bottles` : ''})
+                      </option>
                     ))}
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="text-sm font-semibold text-slate-700 block mb-2">Quantity *</label>
                     <input
@@ -1622,6 +1658,16 @@ const Inventory = () => {
                         <option key={u} value={u}>{u}</option>
                       ))}
                     </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 block mb-2">Bottles</label>
+                    <input
+                      type="number"
+                      value={distributeForm.items[0]?.bottles || ''}
+                      onChange={e => setDistributeForm({ ...distributeForm, items: [{ ...distributeForm.items[0], bottles: e.target.value }] })}
+                      className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium outline-none focus:border-orange-500"
+                      placeholder="e.g., 10"
+                    />
                   </div>
                 </div>
 
@@ -1905,9 +1951,9 @@ const Inventory = () => {
                       </p>
                     </div>
                     <div className="bg-amber-50 p-3 md:p-4 rounded-xl text-center border border-amber-100 col-span-2 md:col-span-1">
-                      <p className="text-[10px] md:text-xs text-amber-600 font-medium uppercase">Used</p>
+                      <p className="text-[10px] md:text-xs text-amber-600 font-medium uppercase">Bottles</p>
                       <p className="text-xl md:text-2xl font-black text-amber-700">
-                        {(employeeInventory || []).reduce((sum, i) => sum + (i.totalReturned || 0), 0)} L
+                        {(employeeInventory || []).reduce((sum, i) => sum + (i.bottles || 0), 0)}
                       </p>
                     </div>
                   </div>
@@ -1926,6 +1972,8 @@ const Inventory = () => {
                         <div className="text-right">
                           <p className="text-xl md:text-2xl font-black text-blue-600">{item.currentStock} <span className="text-sm font-medium text-slate-500">{item.unit}</span></p>
                           <p className="text-[10px] md:text-xs text-slate-500">
+                            {item.bottles > 0 && <span className="text-orange-600 font-medium">Bottles: {item.bottles}</span>}
+                            {(item.bottles > 0) && ' • '}
                             Rec: {item.totalReceived} | Ret: {item.totalReturned || 0}
                           </p>
                         </div>
@@ -2723,12 +2771,12 @@ const Inventory = () => {
                 {transferForm.items.map((item, idx) => {
                   const selectedChem = chemicals.find(c => c._id === item.chemicalId);
                   return (
-                    <div key={idx} className="flex gap-2 mb-2">
+                    <div key={idx} className="flex flex-wrap gap-2 mb-2">
                       <select value={item.chemicalId} onChange={e => {
                         const newItems = [...transferForm.items];
                         newItems[idx].chemicalId = e.target.value;
                         setTransferForm({ ...transferForm, items: newItems });
-                      }} className="flex-1 p-2 border rounded-lg">
+                      }} className="flex-1 p-2 border rounded-lg min-w-[150px]">
                         <option value="">Select Chemical</option>
                         {chemicals.filter(c => (c.mainStock || 0) > 0).map(c => <option key={c._id} value={c._id}>{c.name} (Stock: {c.mainStock} {c.unitSystem || 'L'})</option>)}
                       </select>
@@ -2751,11 +2799,21 @@ const Inventory = () => {
                           <option key={u} value={u}>{u}</option>
                         ))}
                       </select>
+                      <select value={item.bottleSize || ''} onChange={e => {
+                        const newItems = [...transferForm.items];
+                        newItems[idx].bottleSize = e.target.value;
+                        setTransferForm({ ...transferForm, items: newItems });
+                      }} className="w-20 p-2 border rounded-lg">
+                        <option value="">Size</option>
+                        <option value="500ml">500ml</option>
+                        <option value="1L">1L</option>
+                        <option value="5L">5L</option>
+                      </select>
                       <button type="button" onClick={() => setTransferForm({ ...transferForm, items: transferForm.items.filter((_, i) => i !== idx) })} className="text-red-500 p-2">✕</button>
                     </div>
                   )
                 })}
-                <button type="button" onClick={() => setTransferForm({ ...transferForm, items: [...transferForm.items, { chemicalId: '', quantity: '', unit: 'L', bottles: '' }] })} className="text-blue-600 text-sm font-semibold">+ Add Item</button>
+                <button type="button" onClick={() => setTransferForm({ ...transferForm, items: [...transferForm.items, { chemicalId: '', quantity: '', unit: 'L', bottles: '', bottleSize: '' }] })} className="text-blue-600 text-sm font-semibold">+ Add Item</button>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">Notes</label>
@@ -2782,7 +2840,7 @@ const Inventory = () => {
                 <label className="block text-sm font-semibold text-slate-700 mb-1">Select Employee</label>
                 <select value={distributeForm.employeeId} onChange={e => setDistributeForm({ ...distributeForm, employeeId: e.target.value })} className="w-full p-3 border rounded-lg">
                   <option value="">Select Employee</option>
-                  {employees?.filter(e => e.role === 'technician' || e.role === 'sales').map(e => <option key={e._id} value={e._id}>{e.name} - {e.employeeId}</option>)}
+                  {employeesQuery?.data?.filter(e => e.role === 'technician' || e.role === 'sales').map(e => <option key={e._id} value={e._id}>{e.name} - {e.employeeId}</option>)}
                 </select>
               </div>
               <div>
@@ -2852,6 +2910,21 @@ const Inventory = () => {
                   </select>
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-semibold block mb-1">Bottles</label>
+                  <input type="number" value={sendForm.bottles} onChange={e => setSendForm({ ...sendForm, bottles: e.target.value })} className="w-full p-2 border rounded-lg" placeholder="0" />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold block mb-1">Bottle Size</label>
+                  <select value={sendForm.bottleSize} onChange={e => setSendForm({ ...sendForm, bottleSize: e.target.value })} className="w-full p-2 border rounded-lg">
+                    <option value="">Select</option>
+                    <option value="500ml">500ml</option>
+                    <option value="1L">1L</option>
+                    <option value="5L">5L</option>
+                  </select>
+                </div>
+              </div>
               <div className="flex gap-3">
                 <button type="button" onClick={() => setShowSendModal(false)} className="flex-1 py-2 bg-gray-100 rounded-lg font-semibold">Cancel</button>
                 <button type="submit" className="flex-1 py-2 bg-blue-600 text-white rounded-lg font-semibold">Send</button>
@@ -2859,6 +2932,18 @@ const Inventory = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Confirm Dialog */}
+      {confirmDialog.open && (
+        <ConfirmDialog
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          danger={confirmDialog.danger}
+          isLoading={confirmDialog.isLoading}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+        />
       )}
     </div>
   );

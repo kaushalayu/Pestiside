@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Mail, Plus, Search as SearchIcon, CheckCircle2, Phone, Target, ArrowRight, DownloadCloud, User, MapPin, Tag, Activity, Clock, ShieldCheck, Database, X, Trash2, ChevronLeft, ChevronRight, Bell, Calendar, Eye } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const STATUS_CONFIG = {
   NEW: { color: 'bg-emerald-50 text-emerald-800 border-emerald-200', label: 'Fresh Inquiry', next: 'CONTACTED' },
@@ -19,6 +20,7 @@ const Enquiries = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [activeBoard, setActiveBoard] = useState('ALL');
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null, danger: false, isLoading: false });
 
   const { data: rawEnquiries, isLoading } = useQuery({ 
      queryKey: ['enquiries', search, page], 
@@ -104,9 +106,18 @@ const Enquiries = () => {
   });
 
   const handleDelete = (enquiry) => {
-    if (window.confirm(`Protocol Alert: Are you sure you want to PURGE lead ${enquiry.customerName}?`)) {
-      deleteMutation.mutate(enquiry._id);
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Lead',
+      message: `Are you sure you want to delete ${enquiry.customerName}? This action cannot be undone.`,
+      danger: true,
+      isLoading: false,
+      onConfirm: () => {
+        setConfirmDialog(prev => ({ ...prev, isLoading: true }));
+        deleteMutation.mutate(enquiry._id);
+        setConfirmDialog(prev => ({ ...prev, open: false, isLoading: false }));
+      }
+    });
   };
 
   if (isLoading) {
@@ -398,6 +409,18 @@ const Enquiries = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Confirm Dialog */}
+      {confirmDialog.open && (
+        <ConfirmDialog
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          danger={confirmDialog.danger}
+          isLoading={confirmDialog.isLoading}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+        />
       )}
     </div>
   );
