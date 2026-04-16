@@ -34,7 +34,7 @@ const EMPTY_FORM = {
   source: 'Walk-in', propertyType: 'Residential',
   serviceInterest: [], priority: 'MEDIUM',
   budget: '', budgetRange: '', requirement: '', notes: '', branchId: '',
-  expectedCloseDate: '',
+  expectedCloseDate: '', nextFollowUp: '',
 };
 
 // ── Confirm Popup ─────────────────────────────────────────────────────────────
@@ -413,6 +413,14 @@ const LeadFormModal = ({ user, branches, onClose, onSubmit, isLoading }) => {
                 placeholder="Describe the pest problem or requirement..." />
             </div>
 
+            {/* Next Follow-up Date */}
+            <div>
+              <label className="text-xs font-semibold text-slate-600 block mb-1">Next Follow-up Date</label>
+              <input type="date" value={form.nextFollowUp} onChange={e => set('nextFollowUp', e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 focus:border-slate-400 focus:bg-white p-2.5 rounded-xl text-sm font-medium outline-none"
+                placeholder="Select follow-up date..." />
+            </div>
+
             <button type="submit" disabled={isLoading}
               className="w-full py-3 bg-slate-900 text-white font-semibold text-sm rounded-xl disabled:opacity-50 flex items-center justify-center gap-2">
               <Zap size={15} /> Review & Submit Lead
@@ -615,6 +623,7 @@ const Leads = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['leads'] });
       qc.invalidateQueries({ queryKey: ['leadStats'] });
+      qc.invalidateQueries({ queryKey: ['followups'] });
       setShowForm(false);
       toast.success('Lead created');
     },
@@ -625,6 +634,7 @@ const Leads = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['leads'] });
       qc.invalidateQueries({ queryKey: ['leadStats'] });
+      qc.invalidateQueries({ queryKey: ['followups'] });
       toast.success('Status updated');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Update failed'),
@@ -634,6 +644,7 @@ const Leads = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['leads'] });
       qc.invalidateQueries({ queryKey: ['leadStats'] });
+      qc.invalidateQueries({ queryKey: ['followups'] });
       setDeleteTarget(null);
       toast.success('Lead deleted');
     },
@@ -644,6 +655,7 @@ const Leads = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['leads'] });
       qc.invalidateQueries({ queryKey: ['leadStats'] });
+      qc.invalidateQueries({ queryKey: ['followups'] });
       setFollowUpTarget(null);
       toast.success('Follow-up saved');
     },
@@ -654,6 +666,7 @@ const Leads = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['leads'] });
       qc.invalidateQueries({ queryKey: ['leadStats'] });
+      qc.invalidateQueries({ queryKey: ['followups'] });
       setAssignTarget(null);
       toast.success('Lead assigned');
     },

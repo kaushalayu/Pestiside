@@ -56,8 +56,8 @@ const Logistics = () => {
       return res.data.data || [];
     },
     enabled: true,
-    staleTime: 0,
-    refetchInterval: 3000
+    staleTime: 30000,
+    refetchInterval: 30000
   });
 
   const { data: activeLog } = useQuery({
@@ -66,8 +66,8 @@ const Logistics = () => {
       const res = await api.get('/travel-logs/active');
       return res.data.data;
     },
-    staleTime: 0,
-    refetchInterval: 3000
+    staleTime: 5000,
+    refetchInterval: 5000
   });
 
   const hoursSinceStart = useMemo(() => {
@@ -77,10 +77,10 @@ const Logistics = () => {
   }, [activeLog]);
 
   useEffect(() => {
-    if (activeLog && !isAdmin) {
+    if (activeLog && !isAdmin && activeLog.startMeter && !activeLog.endMeter) {
       const endMeterInput = document.getElementById('end-meter-input');
       if (endMeterInput) {
-        setTimeout(() => endMeterInput.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+        setTimeout(() => endMeterInput.scrollIntoView({ behavior: 'smooth', block: 'center' }), 500);
       }
     }
   }, [activeLog, isAdmin]);
@@ -91,8 +91,8 @@ const Logistics = () => {
       const res = await api.get('/travel-logs');
       return res.data.data || [];
     },
-    staleTime: 0,
-    refetchInterval: 3000
+    staleTime: 30000,
+    refetchInterval: 30000
   });
 
   const { data: pendingApprovals } = useQuery({
@@ -102,8 +102,8 @@ const Logistics = () => {
       return res.data.data || [];
     },
     enabled: isAdmin,
-    staleTime: 0,
-    refetchInterval: 3000
+    staleTime: 30000,
+    refetchInterval: 30000
   });
 
   const startMutation = useMutation({
@@ -123,20 +123,21 @@ const Logistics = () => {
       };
       
       queryClient.setQueryData(['travel-active'], tempLog);
+      setShowNewForm(false);
+      resetForm();
+      toast.success('Travel started!');
       
       return { previousActive };
     },
     onError: (err, newTravel, context) => {
       queryClient.setQueryData(['travel-active'], context?.previousActive);
+      setShowNewForm(true);
       toast.error(err.response?.data?.message || 'Failed to start');
     },
-    onSuccess: (res) => {
-      toast.success('Travel started!');
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['travel-active'] });
       queryClient.invalidateQueries({ queryKey: ['travel-history'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-      setShowNewForm(false);
-      resetForm();
     },
   });
 
@@ -236,13 +237,30 @@ const Logistics = () => {
 
   const uploadPhoto = async (file) => {
     return new Promise((resolve) => {
+      // Skip heavy compression if file is already small
+      if (file.size < 300000) {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          try {
+            const res = await api.post('/upload', { file: e.target.result });
+            resolve(res.data.data);
+          } catch (error) {
+            toast.error('Upload failed');
+            resolve(null);
+          }
+        };
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+        return;
+      }
+      
       const reader = new FileReader();
       reader.onload = async (e) => {
         try {
           const img = new window.Image();
           img.onload = async () => {
             const canvas = document.createElement('canvas');
-            const maxSize = 1200;
+            const maxSize = 1000; // Reduced for faster processing
             let width = img.width;
             let height = img.height;
             
@@ -258,7 +276,7 @@ const Logistics = () => {
             canvas.height = height;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
-            const compressed = canvas.toDataURL('image/jpeg', 0.7);
+            const compressed = canvas.toDataURL('image/jpeg', 0.5); // Lower quality for speed
             
             try {
               const res = await api.post('/upload', { file: compressed });
@@ -488,7 +506,7 @@ const Logistics = () => {
                         <p className="text-xl font-black text-blue-700">{log.startMeter} km</p>
                         {log.startMeterPhoto ? (
                           <img 
-                            src={log.startMeterPhoto} 
+                            src={log.startMeterPhoto} loading="lazy" 
                             alt="Start meter" 
                             className="w-full h-16 object-cover rounded-lg border border-blue-200 mt-1 cursor-pointer"
                             onClick={() => window.open(log.startMeterPhoto, '_blank')}
@@ -502,7 +520,7 @@ const Logistics = () => {
                         <p className="text-xl font-black text-emerald-700">{log.endMeter} km</p>
                         {log.endMeterPhoto ? (
                           <img 
-                            src={log.endMeterPhoto} 
+                            src={log.endMeterPhoto} loading="lazy" 
                             alt="End meter" 
                             className="w-full h-16 object-cover rounded-lg border border-emerald-200 mt-1 cursor-pointer"
                             onClick={() => window.open(log.endMeterPhoto, '_blank')}
@@ -590,6 +608,7 @@ const Logistics = () => {
                 <img 
                   src={activeLog.startMeterPhoto} 
                   alt="Start meter" 
+                  loading="lazy"
                   className="w-full h-16 object-cover rounded-lg border border-white mt-1 cursor-pointer"
                   onClick={() => {
                     window.open(activeLog.startMeterPhoto, '_blank');
@@ -609,6 +628,7 @@ const Logistics = () => {
                 <img 
                   src={activeLog.endMeterPhoto} 
                   alt="End meter" 
+                  loading="lazy"
                   className="w-full h-16 object-cover rounded-lg border border-white mt-1 cursor-pointer"
                   onClick={() => {
                     window.open(activeLog.endMeterPhoto, '_blank');
@@ -689,6 +709,7 @@ const Logistics = () => {
                   <img 
                     src={activeLog.startMeterPhoto} 
                     alt="Start meter" 
+                    loading="lazy"
                     className="w-full h-20 object-cover rounded-lg border-2 border-white cursor-pointer"
                     onClick={() => {
                       if (activeLog.startMeterPhoto) {
@@ -713,6 +734,7 @@ const Logistics = () => {
                   <img 
                     src={travelData.endMeterPhoto} 
                     alt="End meter" 
+                    loading="lazy"
                     className="w-full h-20 object-cover rounded-lg border-2 border-white cursor-pointer"
                     onClick={() => {
                       window.open(travelData.endMeterPhoto, '_blank');
@@ -752,6 +774,7 @@ const Logistics = () => {
                   <img 
                     src={activeLog.startMeterPhoto} 
                     alt="Start meter" 
+                    loading="lazy"
                     className="w-full h-32 object-cover rounded-lg border-2 border-blue-200 cursor-pointer"
                     onClick={() => {
                       window.open(activeLog.startMeterPhoto, '_blank');
@@ -814,15 +837,16 @@ const Logistics = () => {
                     <div className="relative">
                       <img 
                         src={travelData.endMeterPhoto} 
-                      alt="End meter" 
-                      className="w-full h-32 object-cover rounded-lg border-2 border-emerald-300 cursor-pointer"
-                      onClick={() => {
-                        window.open(travelData.endMeterPhoto, '_blank');
-                      }}
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                      }}
-                    />
+                        alt="End meter" 
+                        loading="lazy"
+                        className="w-full h-32 object-cover rounded-lg border-2 border-emerald-300 cursor-pointer"
+                        onClick={() => {
+                          window.open(travelData.endMeterPhoto, '_blank');
+                        }}
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                        }}
+                      />
                       <p className="text-[10px] text-emerald-600 text-center mt-1">Tap to enlarge</p>
                     </div>
                   ) : (

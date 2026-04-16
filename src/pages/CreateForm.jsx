@@ -1387,7 +1387,7 @@ const CreateForm = () => {
                     <Label>ATT Rate Per Square Feet (₹)</Label>
                     <Input
                       type="text"
-                      onChange={e => setFormData(prev => ({ ...prev, ratePerSqft: parseFloat(e.target.value.replace(/[^0-9]/g, '')) || 0 }))}
+                      onChange={e => setFormData(prev => ({ ...prev, ratePerSqft: parseFloat(e.target.value.replace(/[^0-9.]/g, '')) || 0 }))}
                       placeholder="Enter ATT rate per sqft"
                       className="text-lg font-bold !py-4 flex-1"
                     />

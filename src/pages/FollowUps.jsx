@@ -3,7 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Calendar, Clock, Phone, MapPin, AlertCircle, CheckCircle2,
   Search, ChevronLeft, ChevronRight, X, Bell, Star, RefreshCw,
-  Filter, TrendingUp, ArrowRight, Users
+  Filter, TrendingUp, ArrowRight, Users, MessageSquare, CalendarDays,
+  IndianRupee, TrendingUp as PriorityIcon, Building2, User,
+  Mail, Globe, Tag
 } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
@@ -14,9 +16,16 @@ const STATUS_CONFIG = {
   CONTACTED:      { color: 'bg-blue-100 text-blue-700',       label: 'Contacted' },
   VISIT_DONE:     { color: 'bg-cyan-100 text-cyan-700',       label: 'Visit Done' },
   DEMO_SCHEDULED: { color: 'bg-violet-100 text-violet-700',   label: 'Demo Sched.' },
-  QUALIFIED:      { color: 'bg-purple-100 text-purple-700',   label: 'Qualified' },
+  QUALIFIED:      { color: 'bg-purple-100 text-purple-700',    label: 'Qualified' },
   CONVERTED:      { color: 'bg-slate-900 text-white',         label: 'Converted' },
   LOST:           { color: 'bg-red-100 text-red-600',         label: 'Lost' },
+};
+
+const PRIORITY_CONFIG = {
+  LOW:    { color: 'bg-slate-100 text-slate-600', label: 'Low',    icon: '↓' },
+  MEDIUM: { color: 'bg-blue-100 text-blue-600',   label: 'Medium', icon: '→' },
+  HIGH:   { color: 'bg-amber-100 text-amber-600', label: 'High',   icon: '↑' },
+  URGENT: { color: 'bg-red-100 text-red-600',     label: 'Urgent', icon: '🔥' },
 };
 
 const getDueInfo = (dateStr) => {
@@ -29,6 +38,26 @@ const getDueInfo = (dateStr) => {
   if (diff === 0) return { label: 'Due today',                  color: 'bg-amber-50 text-amber-600 border-amber-200', icon: 'today' };
   if (diff === 1) return { label: 'Due tomorrow',               color: 'bg-blue-50 text-blue-600 border-blue-200',   icon: 'soon' };
   return           { label: `In ${diff} days`,                  color: 'bg-slate-50 text-slate-500 border-slate-200', icon: 'future' };
+};
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return '-';
+  return new Date(dateStr).toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+const formatDateTime = (dateStr) => {
+  if (!dateStr) return '-';
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 };
 
 // ── Quick Follow-up Modal ─────────────────────────────────────────────────────
@@ -84,69 +113,225 @@ const QuickFollowUpModal = ({ lead, onClose, onSubmit, isLoading }) => {
   );
 };
 
+const OUTCOME_LABELS = {
+  CALL_NOT_ANSWERED: 'No Answer',
+  BUSY: 'Busy',
+  NOT_INTERESTED: 'Not Interested',
+  PRICE_HIGH: 'Price High',
+  COMPETING: 'Competitor',
+  SCHEDULED_VISIT: 'Visit Scheduled',
+  OTHER: 'Other',
+};
+
+const getOutcomeBadge = (outcome) => {
+  const colorMap = {
+    CALL_NOT_ANSWERED: 'bg-slate-100 text-slate-600',
+    BUSY: 'bg-amber-100 text-amber-700',
+    NOT_INTERESTED: 'bg-red-100 text-red-600',
+    PRICE_HIGH: 'bg-orange-100 text-orange-700',
+    COMPETING: 'bg-purple-100 text-purple-700',
+    SCHEDULED_VISIT: 'bg-emerald-100 text-emerald-700',
+    OTHER: 'bg-blue-100 text-blue-700',
+  };
+  return { label: OUTCOME_LABELS[outcome] || outcome, color: colorMap[outcome] || 'bg-slate-100 text-slate-600' };
+};
+
 // ── Follow-up Card ────────────────────────────────────────────────────────────
 const FollowUpCard = ({ lead, onLog, onStatusChange }) => {
   const st = STATUS_CONFIG[lead.status] || STATUS_CONFIG.NEW;
+  const priority = PRIORITY_CONFIG[lead.priority] || PRIORITY_CONFIG.MEDIUM;
   const due = getDueInfo(lead.nextFollowUp);
   const isOverdue = due?.icon === 'overdue';
   const isToday = due?.icon === 'today';
+  const recentFollowUps = lead.followups?.slice(-5).reverse() || [];
+
+  const totalFollowUps = lead.followups?.length || 0;
+  const lastContacted = lead.lastContactedAt ? formatDate(lead.lastContactedAt) : 'Never';
 
   return (
-    <div className={`bg-white rounded-2xl border transition-all hover:shadow-md overflow-hidden ${isOverdue ? 'border-red-200' : isToday ? 'border-amber-200' : 'border-slate-100 hover:border-slate-200'}`}>
+    <div className={`bg-white rounded-2xl border transition-all hover:shadow-lg overflow-hidden ${isOverdue ? 'border-red-300 shadow-red-100' : isToday ? 'border-amber-300 shadow-amber-100' : 'border-slate-200 hover:border-slate-300'}`}>
       {/* Priority strip */}
-      <div className={`h-0.5 w-full ${isOverdue ? 'bg-red-400' : isToday ? 'bg-amber-400' : 'bg-slate-100'}`} />
+      <div className={`h-1 w-full ${isOverdue ? 'bg-gradient-to-r from-red-500 to-red-400' : isToday ? 'bg-gradient-to-r from-amber-500 to-amber-400' : 'bg-gradient-to-r from-slate-300 to-slate-200'}`} />
 
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-2 mb-2">
+      <div className="p-4 space-y-3">
+        {/* Header - Name, Phone, Status */}
+        <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-slate-900 text-sm truncate">{lead.name}</h3>
-            <div className="flex items-center gap-3 mt-0.5 text-xs text-slate-400">
-              <span className="flex items-center gap-1"><Phone size={10} />{lead.phone}</span>
-              <span className="flex items-center gap-1"><MapPin size={10} />{lead.city}</span>
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="font-bold text-slate-900 text-sm truncate">{lead.name}</h3>
+              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 ${priority.color}`}>
+                {priority.icon} {priority.label}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+              <span className="flex items-center gap-1"><Phone size={10} className="text-slate-400" />{lead.phone}</span>
+              <span className="flex items-center gap-1"><MapPin size={10} className="text-slate-400" />{lead.city || '-'}</span>
             </div>
           </div>
-          <span className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold shrink-0 ${st.color}`}>{st.label}</span>
+          <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold shrink-0 ${st.color}`}>{st.label}</span>
         </div>
 
-        {/* Due badge */}
-        {due && (
-          <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border mb-3 ${due.color}`}>
-            <Clock size={11} /> {due.label}
+        {/* Due Date Section */}
+        <div className={`p-3 rounded-xl border ${due ? due.color : 'bg-slate-50 border-slate-200'}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CalendarDays size={14} className={isOverdue ? 'text-red-500' : isToday ? 'text-amber-500' : 'text-slate-400'} />
+              <span className="text-xs font-semibold text-slate-600">Next Follow-up</span>
+            </div>
+            <span className="text-sm font-bold text-slate-800">
+              {lead.nextFollowUp ? formatDate(lead.nextFollowUp) : 'Not Set'}
+            </span>
           </div>
-        )}
+          {due && (
+            <div className="mt-1 text-xs font-medium text-slate-500">
+              {due.label}
+            </div>
+          )}
+        </div>
+
+        {/* Quick Info Grid */}
+        <div className="grid grid-cols-2 gap-2">
+          {/* Source */}
+          <div className="bg-slate-50 rounded-lg p-2">
+            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mb-0.5">
+              <Globe size={9} /> Source
+            </div>
+            <p className="text-xs font-semibold text-slate-700 truncate">{lead.source || 'Direct'}</p>
+          </div>
+          
+          {/* Created */}
+          <div className="bg-slate-50 rounded-lg p-2">
+            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mb-0.5">
+              <Calendar size={9} /> Created
+            </div>
+            <p className="text-xs font-semibold text-slate-700">{formatDate(lead.createdAt)}</p>
+          </div>
+        </div>
 
         {/* Services */}
         {lead.serviceInterest?.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-3">
-            {lead.serviceInterest.slice(0, 3).map(s => (
-              <span key={s} className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md text-[10px] font-medium text-slate-500">{s}</span>
-            ))}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-2.5 border border-blue-100">
+            <div className="flex items-center gap-1.5 text-[10px] text-blue-500 font-semibold mb-1.5">
+              <Tag size={9} /> Interested Services
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {lead.serviceInterest.map(s => (
+                <span key={s} className="px-2 py-0.5 bg-white border border-blue-200 rounded-md text-[10px] font-medium text-blue-600">{s}</span>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Assigned */}
-        {lead.assignedTo?.name && (
-          <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-3">
-            <Users size={10} /> {lead.assignedTo.name}
+        {/* Budget & Requirement */}
+        {(lead.budget || lead.requirement || lead.propertyType) && (
+          <div className="flex flex-wrap gap-3">
+            {lead.budget && (
+              <div className="flex items-center gap-1 text-xs text-slate-600">
+                <IndianRupee size={11} className="text-emerald-500" />
+                <span className="font-medium">{lead.budget}</span>
+              </div>
+            )}
+            {lead.propertyType && (
+              <div className="flex items-center gap-1 text-xs text-slate-600">
+                <Building2 size={11} className="text-purple-500" />
+                <span className="font-medium">{lead.propertyType}</span>
+              </div>
+            )}
+            {lead.requirement && (
+              <div className="flex items-center gap-1 text-xs text-slate-600">
+                <MessageSquare size={11} className="text-amber-500" />
+                <span className="font-medium truncate">{lead.requirement}</span>
+              </div>
+            )}
           </div>
         )}
+
+        {/* Assigned & Contact Info */}
+        <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+          <div className="flex items-center gap-3">
+            {lead.assignedTo?.name && (
+              <div className="flex items-center gap-1 text-xs text-slate-500">
+                <User size={11} className="text-slate-400" />
+                <span className="font-medium">{lead.assignedTo.name}</span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-1 text-xs text-slate-400">
+            <Clock size={10} />
+            <span>Last: {lastContacted}</span>
+          </div>
+        </div>
+
+        {/* Follow-up History Section */}
+        <div className="pt-2 border-t border-slate-200">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <MessageSquare size={12} className="text-slate-400" />
+              <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wide">Follow-up History</span>
+              <span className="px-1.5 py-0.5 bg-slate-100 rounded text-[9px] font-bold text-slate-500">{totalFollowUps}</span>
+            </div>
+          </div>
+          
+          {recentFollowUps.length > 0 ? (
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {recentFollowUps.map((fu, idx) => {
+                const outcome = getOutcomeBadge(fu.outcome);
+                return (
+                  <div key={idx} className="bg-slate-50 rounded-lg p-2.5 border border-slate-100 hover:border-slate-200 transition-colors">
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="px-1.5 py-0.5 bg-slate-200 rounded text-[9px] font-bold text-slate-600">
+                          {formatDateTime(fu.date)}
+                        </span>
+                        {fu.nextFollowUp && (
+                          <span className="flex items-center gap-1 text-[9px] text-blue-600 font-medium">
+                            <CalendarDays size={8} /> {formatDate(fu.nextFollowUp)}
+                          </span>
+                        )}
+                      </div>
+                      {fu.outcome && (
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${outcome.color}`}>
+                          {outcome.label}
+                        </span>
+                      )}
+                    </div>
+                    {fu.notes && (
+                      <p className="text-[10px] text-slate-500 leading-relaxed line-clamp-2">{fu.notes}</p>
+                    )}
+                    {!fu.notes && !fu.outcome && (
+                      <p className="text-[10px] text-slate-300 italic">No notes recorded</p>
+                    )}
+                    {fu.createdBy?.name && (
+                      <p className="text-[9px] text-slate-400 mt-1">By: {fu.createdBy.name}</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-4 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+              <Phone size={18} className="text-slate-300 mx-auto mb-1" />
+              <p className="text-xs text-slate-400">No follow-ups yet</p>
+            </div>
+          )}
+        </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-          <div className="flex items-center gap-1 text-xs text-amber-500 font-semibold">
-            <Star size={11} fill="currentColor" /> {lead.leadScore || 0}
+        <div className="flex items-center justify-between pt-3 border-t border-slate-200 bg-slate-50 -mx-4 px-4 pb-0 mt-4 rounded-b-xl">
+          <div className="flex items-center gap-1 text-xs text-amber-600 font-bold">
+            <Star size={12} fill="currentColor" /> {lead.leadScore || 0}
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <select value="" onChange={e => e.target.value && onStatusChange(lead._id, e.target.value)}
-              className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-semibold text-slate-600 outline-none cursor-pointer">
+              className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-semibold text-slate-600 outline-none cursor-pointer hover:border-slate-400 transition-colors">
               <option value="">Move →</option>
               {Object.keys(STATUS_CONFIG).filter(s => s !== lead.status).map(s => (
                 <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
               ))}
             </select>
             <button onClick={() => onLog(lead)}
-              className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-semibold transition-colors">
-              <Phone size={10} /> Call
+              className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-[10px] font-bold transition-colors shadow-sm">
+              <Phone size={10} /> Call Now
             </button>
           </div>
         </div>
@@ -259,7 +444,7 @@ const FollowUps = () => {
     },
   });
 
-  const leads = res?.data?.data || [];
+  const leads = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.data) ? res.data.data : []);
   const todayCount = statsRes?.followupsToday || 0;
   const overdueCount = statsRes?.overdueFollowups || 0;
 
