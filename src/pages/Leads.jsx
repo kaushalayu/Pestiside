@@ -59,21 +59,29 @@ const ConfirmPopup = ({ title, message, onConfirm, onCancel, danger = false }) =
 const AssignModal = ({ lead, user, branches, onClose, onSubmit, isLoading }) => {
   const isSuperAdmin = user?.role === 'super_admin';
   const isSales = user?.role === 'sales';
-  const canPickBranch = isSuperAdmin || isSales;
+  const isOffice = user?.role === 'office';
+  const canPickBranch = isSuperAdmin || isSales || isOffice;
   const [selectedBranch, setSelectedBranch] = useState(
     lead.branchId?._id || lead.branchId ||
     (canPickBranch ? '' : (user?.branchId?._id || user?.branchId || ''))
   );
   const [selectedUser, setSelectedUser] = useState('');
 
+  // For office, fetch all employees. For others, fetch by branch.
   const { data: employees } = useQuery({
-    queryKey: ['branch-employees', selectedBranch],
+    queryKey: ['branch-employees', selectedBranch, isOffice],
     queryFn: async () => {
+      // Office can see all employees
+      if (isOffice) {
+        const res = await api.get('/employees?isActive=true');
+        return res.data?.data || [];
+      }
+      // Others need branch selection
       if (!selectedBranch) return [];
       const res = await api.get(`/employees?branchId=${selectedBranch}&isActive=true`);
       return res.data?.data || [];
     },
-    enabled: !!selectedBranch,
+    enabled: isOffice || !!selectedBranch,
   });
 
   const handleSubmit = (e) => {
@@ -106,7 +114,7 @@ const AssignModal = ({ lead, user, branches, onClose, onSubmit, isLoading }) => 
               <label className="text-[10px] sm:text-xs font-semibold text-slate-600 block mb-1 sm:mb-1.5">Branch</label>
               <select value={selectedBranch} onChange={e => { setSelectedBranch(e.target.value); setSelectedUser(''); }}
                 className="w-full bg-slate-50 border border-slate-200 focus:border-slate-400 p-2 sm:p-2.5 rounded-xl text-xs sm:text-sm font-medium outline-none">
-                <option value="">Select branch...</option>
+                <option value="">Select branch (optional)</option>
                 {branches?.map(b => <option key={b._id} value={b._id}>{b.branchName} ({b.branchCode})</option>)}
               </select>
             </div>
@@ -115,9 +123,9 @@ const AssignModal = ({ lead, user, branches, onClose, onSubmit, isLoading }) => 
             <label className="text-[10px] sm:text-xs font-semibold text-slate-600 block mb-1 sm:mb-1.5">Assign To</label>
             <select required value={selectedUser} onChange={e => setSelectedUser(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 focus:border-slate-400 p-2 sm:p-2.5 rounded-xl text-xs sm:text-sm font-medium outline-none"
-              disabled={canPickBranch && !selectedBranch}>
-              <option value="">{(canPickBranch && !selectedBranch) ? 'Select branch first' : 'Select employee...'}</option>
-              {employees?.map(e => <option key={e._id} value={e._id}>{e.name} ({e.role?.replace('_', ' ')})</option>)}
+              disabled={!isOffice && canPickBranch && !selectedBranch}>
+              <option value="">{(!isOffice && canPickBranch && !selectedBranch) ? 'Select branch first' : 'Select employee...'}</option>
+              {employees?.map(e => <option key={e._id} value={e._id}>{e.name} ({e.role?.replace('_', ' ')}) - {e.branchId?.branchName}</option>)}
             </select>
           </div>
           {lead.assignedTo?.name && (
@@ -143,7 +151,7 @@ const LeadCard = ({ lead, user, onStatusChange, onDelete, onView, onFollowUp, on
   const pr = PRIORITY_CONFIG[lead.priority] || PRIORITY_CONFIG.MEDIUM;
   const isOverdue = lead.nextFollowUp && new Date(lead.nextFollowUp) < new Date();
   const canDelete = user?.role === 'super_admin';
-  const canAssign = user?.role === 'super_admin' || user?.role === 'branch_admin' || user?.role === 'sales';
+  const canAssign = user?.role === 'super_admin' || user?.role === 'branch_admin' || user?.role === 'sales' || user?.role === 'office';
 
   const priorityGradients = {
     URGENT: 'from-red-500 to-red-600',
@@ -578,7 +586,7 @@ const Leads = () => {
   const qc = useQueryClient();
   const isSuperAdmin = user?.role === 'super_admin';
   const canDelete = isSuperAdmin;
-  const canAssign = isSuperAdmin || user?.role === 'branch_admin' || user?.role === 'sales';
+  const canAssign = isSuperAdmin || user?.role === 'branch_admin' || user?.role === 'sales' || user?.role === 'office';
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');

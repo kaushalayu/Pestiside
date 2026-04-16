@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import {
@@ -39,6 +39,16 @@ const fetchTechnicianInventory = async () => {
 
 const fetchTechnicianDistributions = async () => {
   const res = await api.get('/employee-distributions/my-distributions');
+  return res.data.data || [];
+};
+
+const fetchEmployees = async () => {
+  const res = await api.get('/employees');
+  return res.data.data || [];
+};
+
+const fetchAllLeads = async () => {
+  const res = await api.get('/leads?limit=20');
   return res.data.data || [];
 };
 
@@ -87,7 +97,7 @@ const Dashboard = () => {
   const { data: branches = [] } = useQuery({
     queryKey: ['branches'],
     queryFn: fetchBranches,
-    enabled: isSuperAdmin,
+    enabled: isSuperAdmin || isOffice,
   });
 
   const { data, isLoading, error, refetch } = useQuery({
@@ -102,7 +112,7 @@ const Dashboard = () => {
     queryFn: fetchHQSummary,
     staleTime: 0,
     refetchInterval: 3000,
-    enabled: isAdmin,
+    enabled: isAdmin || isOffice,
   });
 
   // Technician specific queries
@@ -196,8 +206,8 @@ const Dashboard = () => {
           </p>
         </div>
         
-        {/* Super Admin Branch Filter */}
-        {isSuperAdmin && branches.length > 0 && (
+        {/* Super Admin / Office Branch Filter */}
+        {(isSuperAdmin || isOffice) && branches.length > 0 && (
           <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border">
             <Filter size={14} className="text-slate-400" />
             <select
@@ -228,14 +238,14 @@ const Dashboard = () => {
       {(isAdmin || isTechnician || isOffice) && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
           <StatCard title={isTechnician ? "My Forms Today" : "Forms Today"} value={stats.forms?.today || 0} subtitle={`${stats.forms?.week || 0} this week`} icon={FileText} color="blue" />
-          <StatCard title={isTechnician ? "Pending Tasks" : "Pending Revenue"} value={isTechnician ? (stats.pendingTasks || 0) : `₹${(stats.pendingRevenue || 0).toLocaleString('en-IN')}`} subtitle={isTechnician ? "Awaiting action" : "Outstanding"} icon={isTechnician ? CheckCircle : IndianRupee} color={isTechnician ? "amber" : "amber"} />
+          <StatCard title={isTechnician ? "My Pending" : "Pending Revenue"} value={isTechnician ? (stats.pendingRevenue || 0) : `₹${(stats.pendingRevenue || 0).toLocaleString('en-IN')}`} subtitle={isTechnician ? "Unpaid jobs" : "Outstanding"} icon={isTechnician ? CheckCircle : IndianRupee} color={isTechnician ? "amber" : "amber"} />
           <StatCard title={isTechnician ? "My Collection" : "Today's Collection"} value={`₹${(stats.todayCollection || 0).toLocaleString('en-IN')}`} subtitle="Collected" icon={Receipt} color="emerald" />
           <StatCard title={isTechnician ? "My Total" : "Total Collection"} value={`₹${(stats.overallCollection || 0).toLocaleString('en-IN')}`} subtitle="All time" icon={TrendingUp} color="purple" />
         </div>
       )}
 
       {/* HQ Summary - Only for Admin */}
-      {isAdmin && hqSummary && (hqSummary.totals || hqSummary.totalReceivedFromHQ) && (
+      {(isAdmin || isOffice) && hqSummary && (hqSummary.totals || hqSummary.totalReceivedFromHQ) && (
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-6 border border-slate-700">
           <div className="flex items-center gap-2 mb-4">
             <Building className="text-emerald-400" size={20} />
@@ -476,6 +486,11 @@ const Dashboard = () => {
           </Link>
         </div>
       </div>
+
+      {/* Office Staff: Lead Assignment Section */}
+      {(isOffice || isSuperAdmin) && (
+        <OfficeLeadAssignment />
+      )}
 
       {/* Technician Dashboard Section */}
       {isTechnician && (
@@ -742,6 +757,213 @@ const Dashboard = () => {
                 <p className="text-slate-400">All caught up!</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const OfficeLeadAssignment = () => {
+  const { user } = useSelector(state => state.auth);
+  const queryClient = useQueryClient();
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [selectedLead, setSelectedLead] = useState(null);
+  const [selectedBranch, setSelectedBranch] = useState('');
+  const [selectedEmployee, setSelectedEmployee] = useState('');
+
+  const isSuperAdmin = user?.role === 'super_admin';
+  const isOffice = user?.role === 'office';
+  const canAssign = isSuperAdmin || isOffice;
+
+  const { data: branches = [] } = useQuery({
+    queryKey: ['branches'],
+    queryFn: async () => {
+      const res = await api.get('/branches');
+      return res.data.data || [];
+    },
+    enabled: canAssign,
+  });
+
+  const { data: leads = [], isLoading: leadsLoading } = useQuery({
+    queryKey: ['all-leads-dashboard'],
+    queryFn: fetchAllLeads,
+    enabled: canAssign,
+    staleTime: 30000,
+  });
+
+  const unassignedLeads = leads.filter(l => !l.assignedTo);
+
+  // For office staff, get all employees for assignment
+  const { data: employees = [] } = useQuery({
+    queryKey: ['all-employees'],
+    queryFn: async () => {
+      const res = await api.get('/employees?isActive=true');
+      return res.data?.data || [];
+    },
+    enabled: canAssign,
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: ({ leadId, payload }) => api.post(`/leads/${leadId}/assign`, payload),
+    onSuccess: () => {
+      toast.success('Lead assigned successfully!');
+      queryClient.invalidateQueries(['all-leads-dashboard']);
+      queryClient.invalidateQueries(['dashboard']);
+      setAssignModalOpen(false);
+      setSelectedLead(null);
+      setSelectedEmployee('');
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || 'Failed to assign lead');
+    }
+  });
+
+  const handleAssign = (lead) => {
+    setSelectedLead(lead);
+    setSelectedBranch(lead.branchId?._id || lead.branchId || '');
+    setSelectedEmployee('');
+    setAssignModalOpen(true);
+  };
+
+  const handleSubmitAssign = (e) => {
+    e.preventDefault();
+    if (!selectedEmployee) {
+      toast.error('Please select an employee');
+      return;
+    }
+    const payload = { assignedTo: selectedEmployee };
+    // Super admin and office can change branch during assignment
+    if ((isSuperAdmin || isOffice) && selectedBranch) payload.branchId = selectedBranch;
+    assignMutation.mutate({ leadId: selectedLead._id, payload });
+  };
+
+  if (!canAssign) return null;
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 p-5 md:p-6">
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-blue-100 rounded-xl">
+            <Target size={18} className="text-blue-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Lead Assignment</h3>
+            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
+              Assign leads to employees across all branches
+            </p>
+          </div>
+        </div>
+        <Link to="/leads" className="text-xs text-brand-600 hover:text-brand-700 font-black uppercase tracking-widest flex items-center gap-1">
+          View All <ArrowUpRight size={12} />
+        </Link>
+      </div>
+
+      {leadsLoading ? (
+        <div className="py-8 text-center">
+          <div className="w-8 h-8 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-2"></div>
+          <p className="text-slate-400 text-xs">Loading leads...</p>
+        </div>
+      ) : unassignedLeads.length > 0 ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {unassignedLeads.slice(0, 6).map(lead => (
+              <div key={lead._id} className="bg-slate-50 rounded-xl p-4 border border-slate-100 hover:border-slate-300 transition-all">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="min-w-0 flex-1">
+                    <h4 className="font-bold text-slate-900 text-sm truncate">{lead.name}</h4>
+                    <p className="text-slate-500 text-xs flex items-center gap-1">
+                      <Phone size={10} /> {lead.phone}
+                    </p>
+                  </div>
+                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[9px] font-bold rounded-lg">Unassigned</span>
+                </div>
+                <div className="flex items-center justify-between mt-3">
+                  <span className="text-slate-400 text-[10px]">
+                    {lead.branchId?.branchName || 'No branch'}
+                  </span>
+                  <button 
+                    onClick={() => handleAssign(lead)}
+                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[10px] font-bold hover:bg-blue-700 transition-all"
+                  >
+                    Assign
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {unassignedLeads.length > 6 && (
+            <div className="text-center pt-2">
+              <Link to="/leads" className="text-xs text-blue-600 hover:text-blue-700 font-semibold">
+                + {unassignedLeads.length - 6} more unassigned leads
+              </Link>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="text-center py-8 bg-slate-50 rounded-xl">
+          <Target size={32} className="text-slate-200 mx-auto mb-3" />
+          <p className="text-slate-500 text-sm font-medium">No unassigned leads</p>
+          <p className="text-slate-400 text-xs mt-1">All leads have been assigned to employees</p>
+        </div>
+      )}
+
+      {/* Assignment Modal */}
+      {assignModalOpen && selectedLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm" onClick={() => setAssignModalOpen(false)} />
+          <div className="relative bg-white rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-150 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-slate-900 rounded-xl flex items-center justify-center">
+                  <UserCheck size={16} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">Assign Lead</h3>
+                  <p className="text-xs text-slate-400">{selectedLead.name} • {selectedLead.phone}</p>
+                </div>
+              </div>
+              <button onClick={() => setAssignModalOpen(false)} className="p-1.5 bg-slate-100 rounded-lg text-slate-400">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleSubmitAssign} className="p-4 sm:p-6 space-y-4">
+              {(isSuperAdmin || isOffice) && (
+              <div>
+                <label className="text-[10px] sm:text-xs font-semibold text-slate-600 block mb-1.5">Branch</label>
+                <select 
+                  value={selectedBranch} 
+                  onChange={e => { setSelectedBranch(e.target.value); setSelectedEmployee(''); }}
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-slate-400 p-2.5 rounded-xl text-xs sm:text-sm font-medium outline-none"
+                >
+                  <option value="">Select branch (optional)</option>
+                  {branches.map(b => <option key={b._id} value={b._id}>{b.branchName} ({b.branchCode})</option>)}
+                </select>
+              </div>
+              )}
+              <div>
+                <label className="text-[10px] sm:text-xs font-semibold text-slate-600 block mb-1.5">Assign To</label>
+                <select 
+                  value={selectedEmployee} 
+                  onChange={e => setSelectedEmployee(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-slate-400 p-2.5 rounded-xl text-xs sm:text-sm font-medium outline-none"
+                >
+                  <option value="">Select employee...</option>
+                  {employees.map(e => <option key={e._id} value={e._id}>{e.name} ({e.role?.replace('_', ' ')}) - {e.branchId?.branchName}</option>)}
+                </select>
+              </div>
+              {selectedLead.assignedTo?.name && (
+                <p className="text-xs text-slate-400 bg-slate-50 px-3 py-2 rounded-lg">
+                  Currently: <span className="font-semibold text-slate-600">{selectedLead.assignedTo.name}</span>
+                </p>
+              )}
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={() => setAssignModalOpen(false)} className="flex-1 py-2.5 bg-slate-100 text-slate-700 font-semibold text-sm rounded-xl">Cancel</button>
+                <button type="submit" disabled={assignMutation.isPending} className="flex-1 py-2.5 bg-slate-900 text-white font-semibold text-sm rounded-xl disabled:opacity-50">
+                  {assignMutation.isPending ? 'Assigning...' : 'Assign'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
