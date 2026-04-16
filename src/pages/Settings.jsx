@@ -642,22 +642,47 @@ const Settings = () => {
             <div>
               <label className="text-[9px] font-bold text-slate-600 uppercase block mb-2">Company Logo (for PDF)</label>
               <div className="flex items-center gap-4">
-                <div className="w-20 h-20 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center bg-slate-50">
+                <div className="w-20 h-20 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center bg-slate-50 relative overflow-hidden">
                   {companySettings.logo ? (
                     <img src={companySettings.logo} alt="Logo" className="w-full h-full object-contain p-1" />
                   ) : (
                     <Upload size={24} className="text-slate-400" />
                   )}
+                  <input 
+                    type="file" 
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      
+                      // Convert to base64
+                      const reader = new FileReader();
+                      reader.onload = async () => {
+                        const base64 = reader.result;
+                        try {
+                          const res = await api.post('/upload', { file: base64 });
+                          if (res.data.success) {
+                            setCompanySettings({...companySettings, logo: res.data.data});
+                            toast.success('Logo uploaded successfully!');
+                          }
+                        } catch (err) {
+                          toast.error('Failed to upload logo');
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }}
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                  />
                 </div>
                 <div className="flex-1">
                   <input 
                     type="text" 
                     value={companySettings.logo || ''}
                     onChange={e => setCompanySettings({...companySettings, logo: e.target.value})}
-                    placeholder="Paste logo URL here (https://...)"
+                    placeholder="Or paste logo URL here (https://...)"
                     className="w-full border border-slate-200 rounded-lg p-2 text-xs mb-2"
                   />
-                  <p className="text-[10px] text-slate-400">Or enter image URL</p>
+                  <p className="text-[10px] text-slate-400">Click on image to upload or paste URL</p>
                 </div>
               </div>
             </div>
